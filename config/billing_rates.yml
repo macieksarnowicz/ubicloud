@@ -1,4 +1,8 @@
 # Active billing rates
+- { id: 4809dd5b-1cdd-4e01-b587-4847a5565592, resource_type: VmCores,                 resource_family: burstable,       location: hetzner-fsn1,   unit_price: 0.0000000000, active_from: 2024-10-15T00:00:00Z }
+- { id: 4520f5ae-f36b-4f99-8b45-15002739b782, resource_type: VmStorage,               resource_family: burstable,       location: hetzner-fsn1,   unit_price: 0.0000000000, active_from: 2024-10-15T00:00:00Z }
+- { id: 6d7381ec-4e1c-408a-8e23-357996b9747e, resource_type: VmCores,                 resource_family: shared,          location: hetzner-fsn1,   unit_price: 0.0000000000, active_from: 2024-10-15T00:00:00Z }
+- { id: 72905600-f48b-4108-b5c4-d6e08caed1d7, resource_type: VmStorage,               resource_family: shared,          location: hetzner-fsn1,   unit_price: 0.0000000000, active_from: 2024-10-15T00:00:00Z }
 - { id: ebf592fd-8586-4457-8c86-aa1ed774b90d, resource_type: VmCores,                 resource_family: standard,        location: hetzner-fsn1,   unit_price: 0.0006040000, active_from: 2024-08-22T00:00:00Z }
 - { id: d31188b8-ced8-4bab-bb73-ee6b0c6a4806, resource_type: VmCores,                 resource_family: standard,        location: hetzner-hel1,   unit_price: 0.0005740000, active_from: 2024-08-22T00:00:00Z }
 - { id: a63fc107-176f-41e6-baf6-a1399446f616, resource_type: VmCores,                 resource_family: standard,        location: github-runners, unit_price: 0.0005257320, active_from: 2024-05-27T00:00:00Z }
