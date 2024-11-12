@@ -322,6 +322,7 @@ end
 #  boot_image            | boot_image_vm_host_id_fkey         | (vm_host_id) REFERENCES vm_host(id)
 #  hetzner_host          | hetzner_host_id_fkey               | (id) REFERENCES vm_host(id)
 #  pci_device            | pci_device_vm_host_id_fkey         | (vm_host_id) REFERENCES vm_host(id)
+#  resource_group        | resource_group_vm_host_id_fkey     | (vm_host_id) REFERENCES vm_host(id)
 #  spdk_installation     | spdk_installation_vm_host_id_fkey  | (vm_host_id) REFERENCES vm_host(id)
 #  storage_device        | storage_device_vm_host_id_fkey     | (vm_host_id) REFERENCES vm_host(id)
 #  vm                    | vm_vm_host_id_fkey                 | (vm_host_id) REFERENCES vm_host(id)

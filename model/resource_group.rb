@@ -21,24 +21,24 @@ class ResourceGroup < Sequel::Model
   # Returns an array of size of #cpus at the host
   # with 1s in slots for allowed cpus and 0s elsewhere
   def self.cpuset_to_bitmask(cpuset)
-    fail "cpuset cannot be empty" if cpuset.nil? || cpuset.empty?
+    fail "Cpuset cannot be empty." if cpuset.nil? || cpuset.empty?
+    fail "Cpuset can only contains numbers, comma (,) , and hypen (-)." unless /^[[0-9]+-?*,?]+$/.match?(cpuset)
 
     cpu_groups = cpuset.split(",").map { _1.strip }
     cpu_ranges = cpu_groups.map { _1.split("-").map { |n| n.to_i } }
-    fail "undefined cpuset" if cpu_ranges.size == 0
     # expand each range if it is just one value
     cpu_ranges.each do |range|
       if range.size == 1
         range.append(range[0])
       elsif range.size != 2
-        fail "unexpected range size"
+        fail "Unexpected list of cpus in the cpuset."
       end
     end
 
     # we now have a set of ranges, each cpu range
     # describing a low and high end
     # it is possible to low and high end to be the same
-    fail "invalid cpuset ranges" unless cpu_ranges.reduce(false) { |acc, n| n.size == 2 && n[0] <= n[1] }
+    fail "Invalid list of cpus in the cpuset." unless cpu_ranges.reduce(false) { |acc, n| n[0] <= n[1] }
 
     # we can convert to bitmask
     #
@@ -54,17 +54,19 @@ class ResourceGroup < Sequel::Model
   end
 
   def to_cpu_bitmask
-    ResourceGroup.cpuset_to_bitmask(allowed_cpus)
+    bitmask = ResourceGroup.cpuset_to_bitmask(allowed_cpus)
 
     # if we know the number of cpus on the host,
     # resize the bitarray to that size
-    # unless vm_host.nil? && bitmask.size < vm_host.total_cpus
-    #   expanded_bitmask = BitArray.new(vm_host.total_cpus)
+    if !vm_host.nil? && bitmask.size < vm_host.total_cpus
+      expanded_bitmask = BitArray.new(vm_host.total_cpus)
 
-    #   # TODO: there might be a better way to do it
-    #   (0..bitmask.size).each { |i| expanded_bitmask[i] = bitmask[i] }
-    #   bitmask = expanded_bitmask
-    # end
+      # TODO: there might be a better way to do it
+      (0..bitmask.size).each { |i| expanded_bitmask[i] = bitmask[i] }
+      bitmask = expanded_bitmask
+    end
+
+    bitmask
   end
 
   # converts the bitmask array returned by the
@@ -84,17 +86,16 @@ class ResourceGroup < Sequel::Model
 
       if idx_b != -1 && idx_e == -1 && bitmask[i] == 0
         # first negative bit set, after some poisitve ones
-        idx_e = i
+        idx_e = i - 1
 
-        cpu_ranges.append([idx_b, idx_e - 1])
+        cpu_ranges.append((idx_b < idx_e) ? "#{idx_b}-#{idx_e}" : idx_b.to_s)
         idx_b = -1
         idx_e = -1
       end
     end
 
-    # convert the ranges into a string representation
-    cpu_groups = cpu_ranges.map { |r| (r[0] < r[1]) ? "#{r[0]}-#{r[1]}" : "#{r[0]}" }
-    cpu_groups.join(",")
+    # return a single list
+    cpu_ranges.join(",")
   end
 
   def from_cpu_bitmask(bitmask)
@@ -108,3 +109,28 @@ class ResourceGroup < Sequel::Model
     name + ".slice"
   end
 end
+
+# Table: resource_group
+# Columns:
+#  id                | uuid                     | PRIMARY KEY
+#  name              | text                     | NOT NULL
+#  allocation_state  | allocation_state         | NOT NULL DEFAULT 'unprepared'::allocation_state
+#  type              | resource_group_type      | NOT NULL DEFAULT 'dedicated'::resource_group_type
+#  allowed_cpus      | text                     | NOT NULL
+#  cores             | integer                  | NOT NULL
+#  total_cpu_percent | integer                  | NOT NULL
+#  used_cpu_percent  | integer                  | NOT NULL
+#  total_memory_1g   | integer                  | NOT NULL
+#  used_memory_1g    | integer                  | NOT NULL
+#  created_at        | timestamp with time zone | NOT NULL DEFAULT now()
+#  vm_host_id        | uuid                     |
+# Indexes:
+#  resource_group_pkey | PRIMARY KEY btree (id)
+# Check constraints:
+#  cores_not_negative       | (cores >= 0)
+#  cpu_allocation_limit     | (used_cpu_percent <= total_cpu_percent)
+#  memory_allocation_limit  | (used_memory_1g <= total_memory_1g)
+#  used_cpu_not_negative    | (used_cpu_percent >= 0)
+#  used_memory_not_negative | (used_memory_1g >= 0)
+# Foreign key constraints:
+#  resource_group_vm_host_id_fkey | (vm_host_id) REFERENCES vm_host(id)
