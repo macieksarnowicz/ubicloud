@@ -14,7 +14,7 @@ class VmHost < Sequel::Model
   one_to_many :storage_devices, key: :vm_host_id
   one_to_many :pci_devices, key: :vm_host_id
   one_to_many :boot_images, key: :vm_host_id
-  one_to_many :resource_groups, key: :vm_host_id
+  one_to_many :vm_host_slices, key: :vm_host_id
 
   plugin :association_dependencies, assigned_host_addresses: :destroy, assigned_subnets: :destroy, hetzner_host: :destroy, spdk_installations: :destroy, storage_devices: :destroy, pci_devices: :destroy, boot_images: :destroy
 
@@ -323,7 +323,7 @@ end
 #  boot_image            | boot_image_vm_host_id_fkey         | (vm_host_id) REFERENCES vm_host(id)
 #  hetzner_host          | hetzner_host_id_fkey               | (id) REFERENCES vm_host(id)
 #  pci_device            | pci_device_vm_host_id_fkey         | (vm_host_id) REFERENCES vm_host(id)
-#  resource_group        | resource_group_vm_host_id_fkey     | (vm_host_id) REFERENCES vm_host(id)
 #  spdk_installation     | spdk_installation_vm_host_id_fkey  | (vm_host_id) REFERENCES vm_host(id)
 #  storage_device        | storage_device_vm_host_id_fkey     | (vm_host_id) REFERENCES vm_host(id)
 #  vm                    | vm_vm_host_id_fkey                 | (vm_host_id) REFERENCES vm_host(id)
+#  vm_host_slice         | vm_host_slice_vm_host_id_fkey      | (vm_host_id) REFERENCES vm_host(id)
