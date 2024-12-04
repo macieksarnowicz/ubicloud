@@ -85,17 +85,13 @@ RSpec.describe Vm do
       allow(vm).to receive_messages(projects: [project])
     end
 
-    it "handles x64 arch" do
-      vm.cpu_percent_limit = 200
-      vm.cores = 1
-      vm.cpus = 2
+    it "handles standard family" do
+      vm.family = "standard"
       expect(vm.can_share_slice?).to be_falsey
     end
 
-    it "handles arm64 arch" do
-      vm.cpu_percent_limit = 50
-      vm.cores = 1
-      vm.cpus = 1
+    it "handles burstable family" do
+      vm.family = "burstable"
       expect(vm.can_share_slice?).to be_truthy
     end
   end
@@ -104,6 +100,7 @@ RSpec.describe Vm do
     it "scales a single-socket hyperthreaded system" do
       vm.family = "standard"
       vm.cores = 2
+      vm.cpus = 4
       expect(vm).to receive(:vm_host).and_return(instance_double(
         VmHost,
         total_cpus: 12,
@@ -117,6 +114,7 @@ RSpec.describe Vm do
     it "scales a dual-socket hyperthreaded system" do
       vm.family = "standard"
       vm.cores = 2
+      vm.cpus = 4
       expect(vm).to receive(:vm_host).and_return(instance_double(
         VmHost,
         total_cpus: 24,
@@ -152,6 +150,7 @@ RSpec.describe Vm do
     it "crashes if cores allocated per die is not uniform number" do
       vm.family = "standard"
       vm.cores = 2
+      vm.cpus = 4
 
       expect(vm).to receive(:vm_host).and_return(instance_double(
         VmHost,
@@ -161,7 +160,77 @@ RSpec.describe Vm do
         total_sockets: 1
       )).at_least(:once)
 
-      expect { vm.cloud_hypervisor_cpu_topology }.to raise_error RuntimeError, "BUG: need uniform number of cores allocated per die"
+      expect { vm.cloud_hypervisor_cpu_topology }.to raise_error RuntimeError, "BUG: arithmetic does not result in the correct number of vcpus"
+    end
+
+    it "scales a single-socket non-hyperthreaded system" do
+      vm.family = "standard"
+      vm.cores = 4
+      vm.cpus = 4
+      expect(vm).to receive(:vm_host).and_return(instance_double(
+        VmHost,
+        total_cpus: 12,
+        total_cores: 12,
+        total_dies: 1,
+        total_sockets: 1
+      )).at_least(:once)
+      expect(vm.cloud_hypervisor_cpu_topology.to_s).to eq("1:4:1:1")
+    end
+
+    it "scales a single-socket hyperthreaded system for shared family" do
+      vm.family = "shared"
+      vm.cores = 2
+      vm.cpus = 1
+      expect(vm).to receive(:vm_host).and_return(instance_double(
+        VmHost,
+        total_cpus: 12,
+        total_cores: 6,
+        total_dies: 1,
+        total_sockets: 1
+      )).at_least(:once)
+      expect(vm.cloud_hypervisor_cpu_topology.to_s).to eq("1:1:1:1")
+    end
+
+    it "scales a single-socket non-hyperthreaded system for shared family" do
+      vm.family = "shared"
+      vm.cores = 2
+      vm.cpus = 1
+      expect(vm).to receive(:vm_host).and_return(instance_double(
+        VmHost,
+        total_cpus: 12,
+        total_cores: 12,
+        total_dies: 1,
+        total_sockets: 1
+      )).at_least(:once)
+      expect(vm.cloud_hypervisor_cpu_topology.to_s).to eq("1:1:1:1")
+    end
+
+    it "scales a single-socket hyperthreaded system for shared family for 2 cpus" do
+      vm.family = "shared"
+      vm.cores = 4
+      vm.cpus = 2
+      expect(vm).to receive(:vm_host).and_return(instance_double(
+        VmHost,
+        total_cpus: 12,
+        total_cores: 6,
+        total_dies: 1,
+        total_sockets: 1
+      )).at_least(:once)
+      expect(vm.cloud_hypervisor_cpu_topology.to_s).to eq("2:1:1:1")
+    end
+
+    it "scales a single-socket non-hyperthreaded system for shared family for 2 cpus" do
+      vm.family = "shared"
+      vm.cores = 4
+      vm.cpus = 2
+      expect(vm).to receive(:vm_host).and_return(instance_double(
+        VmHost,
+        total_cpus: 12,
+        total_cores: 12,
+        total_dies: 1,
+        total_sockets: 1
+      )).at_least(:once)
+      expect(vm.cloud_hypervisor_cpu_topology.to_s).to eq("1:2:1:1")
     end
   end
 
