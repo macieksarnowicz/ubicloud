@@ -50,6 +50,7 @@ group :development do
   gem "standard", ">= 1.24.3"
   gem "simplecov"
   gem "turbo_tests"
+  gem "text-table"
   gem "cuprite"
 end
 
