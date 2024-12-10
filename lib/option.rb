@@ -48,12 +48,12 @@ module Option
     ["almalinux-9", "AlmaLinux 9"]
   ].map { |args| BootImage.new(*args) }.freeze
 
-  VmFamily = Struct.new(:name, :can_share_slice, :slice_overcommit_factor)
+  VmFamily = Struct.new(:name, :can_share_slice, :slice_overcommit_factor, :billing_resource_type)
   VmFamilies = [
-    ["standard", false, 1],
-    ["standard-gpu", false, 1],
-    ["burstable", true, 1],
-    ["basic", true, 4]
+    ["standard", false, 1, "VmCores"],
+    ["standard-gpu", false, 1, "VmCores"],
+    ["burstable", true, 1, "VmCpuPercent"],
+    ["basic", true, 4, "VmCpuPercent"]
   ].map { |args| VmFamily.new(*args) }.freeze
 
   VmSize = Struct.new(:name, :family, :cores, :vcpu, :vcpu_percent_limit, :vcpu_burst_percent_limit, :memory, :storage_size_options, :visible, :gpu, :arch) do
