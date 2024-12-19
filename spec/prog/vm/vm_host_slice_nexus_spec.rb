@@ -49,6 +49,8 @@ RSpec.describe Prog::Vm::VmHostSliceNexus do
   before do
     allow(nx).to receive_messages(vm_host_slice: vm_host_slice)
     allow(vm_host_slice).to receive_messages(vm_host: vm_host)
+    allow(vm_host_slice).to receive(:ubid)
+    allow(vm_host_slice).to receive(:inhost_name).and_return("standard.slice")
   end
 
   describe ".assemble_with_host" do
@@ -160,6 +162,20 @@ RSpec.describe Prog::Vm::VmHostSliceNexus do
       expect(nx).to receive(:register_deadline).with(:wait, 5 * 60)
       expect { nx.wait }.to hop("start_after_host_reboot")
     end
+
+    it "hops to unavailable based on the slice's available status" do
+      expect(nx).to receive(:when_checkup_set?).and_yield
+      expect(nx).to receive(:available?).and_return(false)
+      expect { nx.wait }.to hop("unavailable")
+
+      expect(nx).to receive(:when_checkup_set?).and_yield
+      expect(nx).to receive(:available?).and_raise Sshable::SshError.new("ssh failed", "", "", nil, nil)
+      expect { nx.wait }.to hop("unavailable")
+
+      expect(nx).to receive(:when_checkup_set?).and_yield
+      expect(nx).to receive(:available?).and_return(true)
+      expect { nx.wait }.to nap(30)
+    end
   end
 
   describe "#destroy" do
@@ -179,6 +195,52 @@ RSpec.describe Prog::Vm::VmHostSliceNexus do
       expect(vm_host_slice).to receive(:inhost_name).and_return("standard.slice")
 
       expect { nx.start_after_host_reboot }.to hop("wait")
+    end
+  end
+
+  describe "#unavailable" do
+    it "hops to start_after_host_reboot when needed" do
+      expect(nx).to receive(:when_start_after_host_reboot_set?).and_yield
+      expect(nx).to receive(:incr_checkup)
+      expect { nx.unavailable }.to hop("start_after_host_reboot")
+    end
+
+    it "creates a page if vm is unavailable" do
+      expect(Prog::PageNexus).to receive(:assemble)
+      expect(nx).to receive(:available?).and_return(false)
+      expect { nx.unavailable }.to nap(30)
+    end
+
+    it "resolves the page if vm is available" do
+      pg = instance_double(Page)
+      expect(pg).to receive(:incr_resolve)
+      expect(nx).to receive(:available?).and_return(true)
+      expect(Page).to receive(:from_tag_parts).and_return(pg)
+      expect { nx.unavailable }.to hop("wait")
+    end
+
+    it "does not resolves the page if there is none" do
+      expect(nx).to receive(:available?).and_return(true)
+      expect(Page).to receive(:from_tag_parts).and_return(nil)
+      expect { nx.unavailable }.to hop("wait")
+    end
+  end
+
+  describe "#available?" do
+    it "returns the available status" do
+      expect(sshable).to receive(:cmd).with("systemctl is-active standard.slice").and_return("active\nactive\n").once
+      expect(sshable).to receive(:cmd).with("cat /sys/fs/cgroup/standard.slice/cpuset.cpus.effective").and_return("2-3\n").once
+      expect(sshable).to receive(:cmd).with("cat /sys/fs/cgroup/standard.slice/cpuset.cpus.partition").and_return("root\n").once
+
+      expect(nx.available?).to be true
+    end
+
+    it "fails on the incorrect partition status" do
+      expect(sshable).to receive(:cmd).with("systemctl is-active standard.slice").and_return("active\nactive\n").once
+      expect(sshable).to receive(:cmd).with("cat /sys/fs/cgroup/standard.slice/cpuset.cpus.effective").and_return("2-3\n").once
+      expect(sshable).to receive(:cmd).with("cat /sys/fs/cgroup/standard.slice/cpuset.cpus.partition").and_return("member\n").once
+
+      expect(nx.available?).to be false
     end
   end
 end

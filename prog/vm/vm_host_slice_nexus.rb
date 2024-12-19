@@ -3,7 +3,7 @@
 class Prog::Vm::VmHostSliceNexus < Prog::Base
   subject_is :vm_host_slice
 
-  semaphore :destroy, :start_after_host_reboot
+  semaphore :destroy, :start_after_host_reboot, :checkup
 
   def self.assemble_with_host(name, vm_host, family:, allowed_cpus:, memory_gib:, type: "dedicated")
     fail "Must provide a VmHost." if vm_host.nil?
@@ -61,11 +61,42 @@ class Prog::Vm::VmHostSliceNexus < Prog::Base
   end
 
   label def wait
-    # TODO: add availabiltit checks
-
     when_start_after_host_reboot_set? do
       register_deadline(:wait, 5 * 60)
       hop_start_after_host_reboot
+    end
+
+    when_checkup_set? do
+      hop_unavailable if !available?
+      decr_checkup
+    rescue Sshable::SshError
+      # Host is likely to be down, which will be handled by HostNexus. We still
+      # go to the unavailable state for keeping track of the state.
+      hop_unavailable
+    end
+
+    nap 30
+  end
+
+  label def unavailable
+    # If the slice become unavailable due to host unavailability, it first needs to
+    # go through start_after_host_reboot state to be able to recover.
+    when_start_after_host_reboot_set? do
+      incr_checkup
+      hop_start_after_host_reboot
+    end
+
+    begin
+      if available?
+        Page.from_tag_parts("VmHostSliceUnavailable", vm_host_slice.ubid)&.incr_resolve
+        decr_checkup
+        hop_wait
+      else
+        Prog::PageNexus.assemble("#{vm_host_slice.inhost_name} is unavailable", ["VmHostSliceUnavailable", vm_host_slice.ubid], vm_host_slice.ubid)
+      end
+    rescue Sshable::SshError
+      # Host is likely to be down, which will be handled by HostNexus. No need
+      # to create a page for this case.
     end
 
     nap 30
@@ -93,5 +124,11 @@ class Prog::Vm::VmHostSliceNexus < Prog::Base
     decr_start_after_host_reboot
 
     hop_wait
+  end
+
+  def available?
+    host.sshable.cmd("systemctl is-active #{vm_host_slice.inhost_name}").split("\n").all?("active") &&
+      (host.sshable.cmd("cat /sys/fs/cgroup/#{vm_host_slice.inhost_name}/cpuset.cpus.effective").chomp == vm_host_slice.allowed_cpus) &&
+      (host.sshable.cmd("cat /sys/fs/cgroup/#{vm_host_slice.inhost_name}/cpuset.cpus.partition").chomp == "root")
   end
 end

@@ -9,8 +9,8 @@ class VmHostSlice < Sequel::Model
 
   include ResourceMethods
   include SemaphoreMethods
-  # TODO: include HealthMonitorMethods
-  semaphore :destroy, :start_after_host_reboot
+  include HealthMonitorMethods
+  semaphore :destroy, :start_after_host_reboot, :checkup
 
   # Converts AllowedCPUs format to a bitmask
   # We use cgroup format for storying AllowedCPUs list,
@@ -107,6 +107,33 @@ class VmHostSlice < Sequel::Model
   # Returns the name as used by systemctl and cgroup
   def inhost_name
     name + ".slice"
+  end
+
+  def init_health_monitor_session
+    {
+      ssh_session: vm_host.sshable.start_fresh_session
+    }
+  end
+
+  def check_pulse(session:, previous_pulse:)
+    reading = begin
+      if session[:ssh_session].exec!("systemctl is-active #{inhost_name}").split("\n").all?("active") &&
+          (session[:ssh_session].exec!("cat /sys/fs/cgroup/#{inhost_name}/cpuset.cpus.effective").chomp == allowed_cpus) &&
+          (session[:ssh_session].exec!("cat /sys/fs/cgroup/#{inhost_name}/cpuset.cpus.partition").chomp == "root")
+        "up"
+      else
+        "down"
+      end
+    rescue
+      "down"
+    end
+    pulse = aggregate_readings(previous_pulse: previous_pulse, reading: reading)
+
+    if pulse[:reading] == "down" && pulse[:reading_rpt] > 5 && Time.now - pulse[:reading_chg] > 30 && !reload.checkup_set?
+      incr_checkup
+    end
+
+    pulse
   end
 end
 
