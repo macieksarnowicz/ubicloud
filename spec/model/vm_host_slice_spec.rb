@@ -133,4 +133,40 @@ RSpec.describe VmHostSlice do
       expect(VmHostSlice.count_set_bits(a)).to eq(4)
     end
   end
+
+  describe "availability monitoring" do
+    it "initiates a new health monitor session" do
+      allow(vm_host_slice).to receive_messages(vm_host: vm_host)
+      expect(sshable).to receive(:start_fresh_session)
+      vm_host_slice.init_health_monitor_session
+    end
+
+    it "checks pulse" do
+      session = {
+        ssh_session: instance_double(Net::SSH::Connection::Session)
+      }
+      pulse = {
+        reading: "down",
+        reading_rpt: 5,
+        reading_chg: Time.now - 30
+      }
+      allow(vm_host_slice).to receive_messages(vm_host: vm_host)
+
+      expect(vm_host_slice).to receive(:inhost_name).and_return("standard.slice").at_least(:once)
+      expect(session[:ssh_session]).to receive(:exec!).with("systemctl is-active standard.slice").and_return("active\nactive\n").once
+      expect(session[:ssh_session]).to receive(:exec!).with("cat /sys/fs/cgroup/standard.slice/cpuset.cpus.effective").and_return("2-3\n").once
+      expect(session[:ssh_session]).to receive(:exec!).with("cat /sys/fs/cgroup/standard.slice/cpuset.cpus.partition").and_return("root\n").once
+      expect(vm_host_slice.check_pulse(session: session, previous_pulse: pulse)[:reading]).to eq("up")
+
+      expect(session[:ssh_session]).to receive(:exec!).with("systemctl is-active standard.slice").and_return("active\ninactive\n").once
+      expect(vm_host_slice).to receive(:reload).and_return(vm_host_slice)
+      expect(vm_host_slice).to receive(:incr_checkup)
+      expect(vm_host_slice.check_pulse(session: session, previous_pulse: pulse)[:reading]).to eq("down")
+
+      expect(session[:ssh_session]).to receive(:exec!).and_raise Sshable::SshError
+      expect(vm_host_slice).to receive(:reload).and_return(vm_host_slice)
+      expect(vm_host_slice).to receive(:incr_checkup)
+      expect(vm_host_slice.check_pulse(session: session, previous_pulse: pulse)[:reading]).to eq("down")
+    end
+  end
 end
