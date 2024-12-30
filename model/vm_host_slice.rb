@@ -149,9 +149,9 @@ end
 #  used_cpu_percent  | integer                  | NOT NULL
 #  created_at        | timestamp with time zone | NOT NULL DEFAULT now()
 #  vm_host_id        | uuid                     |
-#  family            | text                     |
 #  total_memory_gib  | integer                  | NOT NULL
 #  used_memory_gib   | integer                  | NOT NULL
+#  family            | text                     |
 # Indexes:
 #  vm_host_slice_pkey | PRIMARY KEY btree (id)
 # Check constraints:

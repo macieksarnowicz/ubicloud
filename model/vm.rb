@@ -295,9 +295,9 @@ end
 #  arch                    | arch                     | NOT NULL DEFAULT 'x64'::arch
 #  allocated_at            | timestamp with time zone |
 #  provisioned_at          | timestamp with time zone |
+#  vm_host_slice_id        | uuid                     |
 #  vcpus                   | integer                  | NOT NULL
 #  memory_gib              | integer                  | NOT NULL
-#  vm_host_slice_id        | uuid                     |
 #  cpu_percent_limit       | integer                  |
 #  cpu_burst_percent_limit | integer                  |
 # Indexes:
