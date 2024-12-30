@@ -17,6 +17,7 @@ end
 Sequel::Model.plugin :many_through_many
 Sequel::Model.plugin :insert_conflict
 Sequel::Model.plugin :inspect_pk
+Sequel::Model.plugin :static_cache_cache, "cache/static_cache.cache"
 
 module SemaphoreMethods
   def self.included(base)
@@ -27,7 +28,12 @@ module SemaphoreMethods
   end
 
   module ClassMethods
+    def semaphore_names
+      @semaphore_names || []
+    end
+
     def semaphore(*names)
+      (@semaphore_names ||= []).concat(names)
       names.each do |sym|
         name = sym.name
         define_method :"incr_#{name}" do
@@ -57,6 +63,16 @@ module ResourceMethods
 
   def inspect_pk
     ubid if id
+  end
+
+  def before_validation
+    set_uuid
+    super
+  end
+
+  def set_uuid
+    self.id ||= self.class.generate_uuid if new?
+    self
   end
 
   INSPECT_CONVERTERS = {
@@ -133,7 +149,7 @@ module ResourceMethods
     end
 
     def ubid_type
-      Object.const_get("UBID::TYPE_#{ClassMethods.uppercase_underscore(name)}")
+      UBID.const_get("TYPE_#{ClassMethods.uppercase_underscore(name)}")
     end
 
     def generate_ubid
@@ -144,12 +160,12 @@ module ResourceMethods
       generate_ubid.to_uuid
     end
 
-    def new_with_id(*, **)
-      new(*, **) { _1.id = generate_uuid }
+    def new_with_id(...)
+      new(...).set_uuid
     end
 
-    def create_with_id(*, **)
-      create(*, **) { _1.id = generate_uuid }
+    def create_with_id(...)
+      create(...)
     end
 
     def redacted_columns
@@ -179,6 +195,9 @@ end
 
 module SequelExtensions
   def delete(force: false, &)
+    # Do not error if this is a plain dataset that does not respond to destroy
+    return super(&) unless respond_to?(:destroy)
+
     rodaauth_in_callstack = !caller.grep(/rodauth/).empty?
     destroy_in_callstack = !caller.grep(/sequel\/model\/base.*_destroy_delete/).empty?
     unless rodaauth_in_callstack || destroy_in_callstack || force

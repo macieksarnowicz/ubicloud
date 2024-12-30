@@ -50,6 +50,10 @@ module Config
   optional :heartbeat_url, string
   optional :clover_database_root_certs, string
   override :max_monitor_threads, 32, int
+  optional :omniauth_github_id, string, clear: true
+  optional :omniauth_github_secret, string, clear: true
+  optional :omniauth_google_id, string, clear: true
+  optional :omniauth_google_secret, string, clear: true
 
   # :nocov:
   override :mail_driver, (production? ? :smtp : :logger), symbol
@@ -146,7 +150,7 @@ module Config
   override :ubuntu_noble_version, "20240702", string
   override :ubuntu_jammy_version, "20240701", string
   override :debian_12_version, "20241004-1890", string
-  override :almalinux_9_version, "9.4-20240805", string
+  override :almalinux_9_version, "9.5-20241120", string
   override :github_ubuntu_2404_version, "20241124.1.1", string
   override :github_ubuntu_2204_version, "20241124.1.1", string
   override :github_ubuntu_2004_version, "20241124.1.1", string

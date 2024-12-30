@@ -5,6 +5,7 @@ require_relative "../model"
 class Account < Sequel::Model(:accounts)
   one_to_many :usage_alerts, key: :user_id
   one_to_many :api_keys, key: :owner_id, conditions: {owner_table: "accounts"}
+  one_to_many :identities, class: :AccountIdentity
 
   plugin :association_dependencies, usage_alerts: :destroy
 
@@ -53,6 +54,7 @@ end
 #  account_activity_times            | account_activity_times_id_fkey                    | (id) REFERENCES accounts(id)
 #  account_authentication_audit_logs | account_authentication_audit_logs_account_id_fkey | (account_id) REFERENCES accounts(id)
 #  account_email_auth_keys           | account_email_auth_keys_id_fkey                   | (id) REFERENCES accounts(id)
+#  account_identities                | account_identities_account_id_fkey                | (account_id) REFERENCES accounts(id)
 #  account_jwt_refresh_keys          | account_jwt_refresh_keys_account_id_fkey          | (account_id) REFERENCES accounts(id)
 #  account_lockouts                  | account_lockouts_id_fkey                          | (id) REFERENCES accounts(id)
 #  account_login_change_keys         | account_login_change_keys_id_fkey                 | (id) REFERENCES accounts(id)

@@ -5,7 +5,6 @@ require "openssl"
 
 class Prog::Vnet::LoadBalancerNexus < Prog::Base
   subject_is :load_balancer
-  semaphore :destroy, :update_load_balancer, :rewrite_dns_records, :refresh_cert
 
   def self.assemble(private_subnet_id, name: nil, algorithm: "round_robin", src_port: nil, dst_port: nil,
     health_check_endpoint: "/up", health_check_interval: 30, health_check_timeout: 15,
@@ -104,6 +103,9 @@ class Prog::Vnet::LoadBalancerNexus < Prog::Base
     reap
     if strand.children.select { _1.prog == "Vnet::CertServer" }.all? { _1.exitval == "certificate is reshared" } || strand.children.empty?
       decr_refresh_cert
+      load_balancer.certs_dataset.exclude(id: load_balancer.active_cert.id).all do |cert|
+        CertsLoadBalancers[cert_id: cert.id].destroy
+      end
       hop_wait
     end
 

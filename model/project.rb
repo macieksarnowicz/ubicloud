@@ -5,6 +5,10 @@ require_relative "../model"
 class Project < Sequel::Model
   one_to_many :access_tags
   one_to_many :access_policies
+  one_to_many :access_control_entries
+  one_to_many :subject_tags, order: :name
+  one_to_many :action_tags, order: :name
+  one_to_many :object_tags, order: :name
   one_to_one :billing_info, key: :id, primary_key: :billing_info_id
   one_to_many :usage_alerts
   one_to_many :github_installations
@@ -70,6 +74,12 @@ class Project < Sequel::Model
     DB.transaction do
       access_tags_dataset.destroy
       access_policies_dataset.destroy
+      access_control_entries_dataset.destroy
+      %w[subject action object].each do |tag_type|
+        dataset = send(:"#{tag_type}_tags_dataset")
+        DB[:"applied_#{tag_type}_tag"].where(tag_id: dataset.select(:id)).delete
+        dataset.destroy
+      end
       github_installations.each { Prog::Github::DestroyGithubInstallation.assemble(_1) }
 
       # We still keep the project object for billing purposes.
@@ -149,7 +159,7 @@ class Project < Sequel::Model
     end
   end
 
-  feature_flag :postgresql_base_image, :vm_public_ssh_keys, :transparent_cache, :location_latitude_fra, :inference_ui, :use_slices_for_allocation, :enable_diagnostics
+  feature_flag :postgresql_base_image, :vm_public_ssh_keys, :transparent_cache, :location_latitude_fra, :inference_ui, :access_all_cache_scopes, :use_slices_for_allocation, :enable_diagnostics
 end
 
 # Table: project
@@ -173,8 +183,12 @@ end
 # Foreign key constraints:
 #  project_billing_info_id_fkey | (billing_info_id) REFERENCES billing_info(id)
 # Referenced By:
-#  access_policy       | access_policy_project_id_fkey       | (project_id) REFERENCES project(id)
-#  access_tag          | access_tag_project_id_fkey          | (project_id) REFERENCES project(id)
-#  github_installation | github_installation_project_id_fkey | (project_id) REFERENCES project(id)
-#  inference_endpoint  | inference_endpoint_project_id_fkey  | (project_id) REFERENCES project(id)
-#  usage_alert         | usage_alert_project_id_fkey         | (project_id) REFERENCES project(id)
+#  access_control_entry | access_control_entry_project_id_fkey | (project_id) REFERENCES project(id)
+#  access_policy        | access_policy_project_id_fkey        | (project_id) REFERENCES project(id)
+#  access_tag           | access_tag_project_id_fkey           | (project_id) REFERENCES project(id)
+#  action_tag           | action_tag_project_id_fkey           | (project_id) REFERENCES project(id)
+#  github_installation  | github_installation_project_id_fkey  | (project_id) REFERENCES project(id)
+#  inference_endpoint   | inference_endpoint_project_id_fkey   | (project_id) REFERENCES project(id)
+#  object_tag           | object_tag_project_id_fkey           | (project_id) REFERENCES project(id)
+#  subject_tag          | subject_tag_project_id_fkey          | (project_id) REFERENCES project(id)
+#  usage_alert          | usage_alert_project_id_fkey          | (project_id) REFERENCES project(id)

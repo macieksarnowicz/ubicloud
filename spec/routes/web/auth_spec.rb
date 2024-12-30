@@ -42,6 +42,38 @@ RSpec.describe Clover, "auth" do
     expect(page).to have_content("Name must only contain letters, numbers, spaces, and hyphens and have max length 63.")
   end
 
+  it "can send email verification email again after 300 seconds" do
+    visit "/create-account"
+    fill_in "Full Name", with: "John Doe"
+    fill_in "Email Address", with: TEST_USER_EMAIL
+    fill_in "Password", with: TEST_USER_PASSWORD
+    fill_in "Password Confirmation", with: TEST_USER_PASSWORD
+    click_button "Create Account"
+
+    expect(page).to have_content("An email has been sent to you with a link to verify your account")
+    expect(Mail::TestMailer.deliveries.length).to eq 1
+
+    fill_in "Email Address", with: TEST_USER_EMAIL
+    fill_in "Password", with: TEST_USER_PASSWORD
+    click_button "Sign in"
+
+    expect(page).to have_content("You need to wait at least 300 seconds before sending another verification email. If you did not receive the email, please check your spam folder.")
+
+    DB[:account_verification_keys].update(email_last_sent: Time.now - 310)
+
+    visit "/login"
+    fill_in "Email Address", with: TEST_USER_EMAIL
+    fill_in "Password", with: TEST_USER_PASSWORD
+    click_button "Sign in"
+
+    expect(page).to have_content("The account you tried to login with is currently awaiting verification")
+
+    click_button "Send Verification Again"
+
+    expect(page).to have_content("An email has been sent to you with a link to verify your account")
+    expect(Mail::TestMailer.deliveries.length).to eq 2
+  end
+
   it "can create new account, verify it, and visit project which invited" do
     p = Project.create_with_id(name: "Invited-project").tap { _1.associate_with_project(_1) }
     p.add_invitation(email: TEST_USER_EMAIL, inviter_id: "bd3479c6-5ee3-894c-8694-5190b76f84cf", expires_at: Time.now + 7 * 24 * 60 * 60)
@@ -116,8 +148,7 @@ RSpec.describe Clover, "auth" do
 
     expect(page.title).to eq("Ubicloud - #{account.projects.first.name} Dashboard")
     page.driver.browser.rack_mock_session.cookie_jar.delete("_Clover.session")
-    # page.refresh does not work, sends deleted _Clover.session cookie
-    visit page.current_path
+    page.refresh
     expect(page.title).to eq("Ubicloud - #{account.projects.first.name} Dashboard")
   end
 
@@ -149,6 +180,20 @@ RSpec.describe Clover, "auth" do
     fill_in "Password", with: "#{TEST_USER_PASSWORD}_new"
 
     click_button "Sign in"
+  end
+
+  it "can not reset password if password disabled" do
+    account = create_account
+    DB[:account_password_hashes].where(id: account.id).delete
+
+    visit "/login"
+    click_link "Forgot your password?"
+
+    fill_in "Email Address", with: TEST_USER_EMAIL
+    click_button "Request Password Reset"
+
+    expect(page).to have_content("Login with password is not enabled for this account.")
+    expect(DB[:account_password_reset_keys].count).to eq 0
   end
 
   it "can login to an account without projects" do
@@ -194,8 +239,7 @@ RSpec.describe Clover, "auth" do
     expect(page.title).to eq("Ubicloud - #{account.projects.first.name} Dashboard")
     page.driver.browser.rack_mock_session.cookie_jar.delete("_Clover.session")
     account.suspend
-    # page.refresh does not work, sends deleted _Clover.session cookie
-    visit page.current_path
+    page.refresh
     expect(page.title).to eq("Ubicloud - Login")
   end
 
@@ -339,6 +383,161 @@ RSpec.describe Clover, "auth" do
 
       expect(page.title).to eq("Ubicloud - Close Account")
       expect(page).to have_content("project has some resources. Delete all related resources first")
+    end
+  end
+
+  describe "social login" do
+    def mock_provider(provider, email = TEST_USER_EMAIL)
+      expect(Config).to receive("omniauth_#{provider}_id").and_return("12345").at_least(:once)
+      OmniAuth.config.add_mock(provider, {
+        provider: provider,
+        uid: "123456790",
+        info: {
+          name: "John Doe",
+          email: email
+        }
+      })
+    end
+
+    before do
+      OmniAuth.config.logger = Logger.new(IO::NULL)
+      OmniAuth.config.test_mode = true
+    end
+
+    it "can create new account" do
+      mock_provider(:github)
+
+      visit "/login"
+      click_button "GitHub"
+
+      account = Account[email: TEST_USER_EMAIL]
+      expect(account).not_to be_nil
+      expect(account.identities_dataset.first(provider: "github", uid: "123456790")).not_to be_nil
+      expect(page.status_code).to eq(200)
+      expect(page.title).to eq("Ubicloud - #{account.projects.first.name} Dashboard")
+    end
+
+    it "can login existing account" do
+      mock_provider(:google)
+      account = create_account
+      account.add_identity(provider: "google", uid: "123456790")
+
+      visit "/login"
+      click_button "Google"
+
+      expect(Account.count).to eq(1)
+      expect(AccountIdentity.count).to eq(1)
+      expect(page.status_code).to eq(200)
+      expect(page.title).to eq("Ubicloud - #{account.projects.first.name} Dashboard")
+    end
+
+    it "can not login existing account before linking it" do
+      mock_provider(:github)
+      create_account
+
+      visit "/login"
+      click_button "GitHub"
+
+      expect(page.status_code).to eq(200)
+      expect(page.title).to eq("Ubicloud - Login")
+      expect(page).to have_content("There is already an account with this email address")
+    end
+
+    describe "authenticated" do
+      let(:account) { create_account }
+
+      before do
+        login(account.email)
+      end
+
+      it "can connect to existing account" do
+        mock_provider(:github, "uSer@example.com")
+
+        visit "/account/login-method"
+        within "#login-method-github" do
+          click_button "Connect"
+        end
+
+        expect(page.title).to eq("Ubicloud - Login Methods")
+        expect(page).to have_content "You have successfully connected your account with Github"
+      end
+
+      it "can disconnect from existing account" do
+        account.add_identity(provider: "google", uid: "123456790")
+        account.add_identity(provider: "github", uid: "123456790")
+
+        visit "/account/login-method"
+        within "#login-method-github" do
+          click_button "Disconnect"
+        end
+
+        expect(page.title).to eq("Ubicloud - Login Methods")
+        expect(page).to have_content "Your account has been disconnected from Github"
+      end
+
+      it "can delete password if another login method is available" do
+        account.add_identity(provider: "google", uid: "123456790")
+
+        visit "/account/login-method"
+        within "#login-method-password" do
+          click_button "Delete"
+        end
+
+        expect(page.title).to eq("Ubicloud - Login Methods")
+        expect(page).to have_content "Your password has been deleted"
+      end
+
+      it "can not disconnect the last login method if has no password" do
+        DB[:account_password_hashes].where(id: account.id).delete
+        account.add_identity(provider: "github", uid: "123456790")
+
+        visit "/account/login-method"
+        within "#login-method-github" do
+          click_button "Disconnect"
+        end
+
+        expect(page.title).to eq("Ubicloud - Login Methods")
+        expect(page).to have_content "You must have at least one login method"
+      end
+
+      it "can not disconnect if it's already disconnected" do
+        account.add_identity(provider: "google", uid: "123456790")
+        account.add_identity(provider: "github", uid: "123456790")
+
+        visit "/account/login-method"
+        account.identities_dataset.first(provider: "github").update(uid: "0987654321")
+        within "#login-method-github" do
+          click_button "Disconnect"
+        end
+
+        expect(page.title).to eq("Ubicloud - Login Methods")
+        expect(page).to have_content "Your account already has been disconnected from Github"
+      end
+
+      it "can not connect an account with different email" do
+        mock_provider(:github, "user2@example.com")
+
+        visit "/account/login-method"
+        within "#login-method-github" do
+          click_button "Connect"
+        end
+
+        expect(page.title).to eq("Ubicloud - Login Methods")
+        expect(page).to have_content "Your account's email address is different from the email address associated"
+      end
+
+      it "can not connect a social account with multiple accounts" do
+        create_account("user2@example.com")
+        mock_provider(:github, "user2@example.com")
+
+        visit "/account/login-method"
+        within "#login-method-github" do
+          click_button "Connect"
+        end
+
+        expect(page.title).to eq("Ubicloud - Login Methods")
+        expect(page).to have_content "Your account's email address is different from the email address associated"
+      end
     end
   end
 end

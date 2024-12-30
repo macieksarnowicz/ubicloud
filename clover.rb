@@ -57,6 +57,17 @@ class Clover < Roda
   plugin :request_headers
   plugin :typecast_params_sized_integers, sizes: [64], default_size: 64
 
+  plugin :host_routing, scope_predicates: true do |hosts|
+    hosts.register :api, :web, :runtime
+    hosts.default :web do |host|
+      if host.start_with?("api.")
+        :api
+      elsif request.path_info.start_with?("/runtime")
+        :runtime
+      end
+    end
+  end
+
   plugin :conditional_sessions,
     key: "_Clover.session",
     cookie_options: {secure: !(Config.development? || Config.test?)},
@@ -80,10 +91,10 @@ class Clover < Roda
     csp.default_src :none
     csp.style_src :self, "https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css"
     csp.img_src :self, "data: image/svg+xml"
-    csp.form_action :self, "https://checkout.stripe.com"
+    csp.form_action :self, "https://checkout.stripe.com", "https://github.com/login/oauth/authorize", "https://accounts.google.com/o/oauth2/auth"
     csp.script_src :self, "https://cdn.jsdelivr.net/npm/jquery@3.7.0/dist/jquery.min.js", "https://cdn.jsdelivr.net/npm/dompurify@3.0.5/dist/purify.min.js", "https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js", "https://challenges.cloudflare.com/turnstile/v0/api.js"
     csp.frame_src :self, "https://challenges.cloudflare.com"
-    csp.connect_src :self
+    csp.connect_src :self, "https://*.ubicloud.com"
     csp.base_uri :none
     csp.frame_ancestors :none
   end
@@ -182,7 +193,9 @@ class Clover < Roda
 
     error = {code:, type:, message:, details:}
 
-    if api? || runtime? || request.headers["Accept"] == "application/json"
+    if runtime?
+      error
+    elsif api? || request.headers["Accept"] == "application/json"
       {error:}
     else
       @error = error
@@ -261,7 +274,7 @@ class Clover < Roda
       :lockout, :login, :logout, :remember, :reset_password,
       :disallow_password_reuse, :password_grace_period, :active_sessions,
       :verify_login_change, :change_password_notify, :confirm_password,
-      :otp, :webauthn, :recovery_codes
+      :otp, :webauthn, :recovery_codes, :omniauth
 
     title_instance_variable :@page_title
     check_csrf? false
@@ -277,6 +290,7 @@ class Clover < Roda
       verify_account_email_sent_redirect { login_route }
       verify_account_email_recently_sent_redirect { login_route }
       verify_account_set_password? false
+      verify_account_resend_explanatory_text { verify_account_email_recently_sent? ? "<p>You need to wait at least #{verify_account_skip_resend_email_within} seconds before sending another verification email. If you did not receive the email, please check your spam folder.</p>" : super() }
 
       send_verify_account_email do
         Util.send_email(email_to, "Welcome to Ubicloud: Please Verify Your Account",
@@ -309,7 +323,13 @@ class Clover < Roda
     login_label "Email Address"
     two_factor_auth_return_to_requested_location? true
     already_logged_in { redirect login_redirect }
-    after_login { remember_login if request.params["remember-me"] == "on" }
+    after_login do
+      remember_login if request.params["remember-me"] == "on"
+      if omniauth_identity && (url = omniauth_params["redirect_url"])
+        flash["notice"] = "You have successfully connected your account with #{omniauth_provider.capitalize}."
+        redirect url
+      end
+    end
 
     update_session do
       if Account[account_session_value].suspended_at
@@ -328,21 +348,47 @@ class Clover < Roda
     password_confirm_label "Password Confirmation"
     before_create_account do
       Validation.validate_cloudflare_turnstile(param("cf-turnstile-response"))
-      account[:id] = Account.generate_uuid
-      account[:name] = param("name")
-      Validation.validate_account_name(account[:name])
+      scope.before_rodauth_create_account(account, param("name"))
     end
     after_create_account do
-      account = Account[account_id]
-      account.create_project_with_default_policy("Default")
-      ProjectInvitation.where(email: account.email).each do |inv|
-        account.associate_with_project(inv.project)
-        if (managed_policy = Authorization::ManagedPolicy.from_name(inv.policy))
-          managed_policy.apply(inv.project, [account], append: true)
+      scope.after_rodauth_create_account(account_id)
+    end
+
+    # :nocov:
+    if Config.omniauth_github_id
+      require "omniauth-github"
+      omniauth_provider :github, Config.omniauth_github_id, Config.omniauth_github_secret
+    end
+    if Config.omniauth_google_id
+      require "omniauth-google-oauth2"
+      omniauth_provider :google_oauth2, Config.omniauth_google_id, Config.omniauth_google_secret, name: :google
+    end
+    # :nocov:
+
+    before_omniauth_create_account do
+      scope.before_rodauth_create_account(account, omniauth_name)
+    end
+
+    after_omniauth_create_account do
+      scope.after_rodauth_create_account(account_id)
+    end
+
+    before_omniauth_callback_route do
+      account = Account[account_from_omniauth&.[](:id)]
+      if authenticated?
+        unless account && account.id == scope.current_account.id
+          flash["error"] = "Your account's email address is different from the email address associated with the #{omniauth_provider.capitalize} account."
+          redirect "/account/login-method"
         end
-        inv.destroy
+      elsif account && account.identities_dataset.where(provider: omniauth_provider.to_s).empty?
+        flash["error"] = "There is already an account with this email address, and it has not been linked to the #{omniauth_provider.capitalize} account.
+        Please login to the existing account normally, and then link it to the #{omniauth_provider.capitalize} account from your account settings.
+        Then you can can login using the #{omniauth_provider.capitalize} account."
+        redirect "/login"
       end
     end
+
+    omniauth_create_account? { !authenticated? }
 
     reset_password_view { view "auth/reset_password", "Request Password" }
     reset_password_request_view { view "auth/reset_password_request", "Request Password Reset" }
@@ -360,6 +406,14 @@ class Clover < Roda
         button_title: "Reset Password",
         button_link: reset_password_email_link)
     end
+
+    before_reset_password_request do
+      unless has_password?
+        flash["error"] = "Login with password is not enabled for this account. Please use other login methods. For any questions or assistance, reach out to our team at support@ubicloud.com"
+        redirect login_route
+      end
+    end
+
     after_reset_password do
       remove_all_active_sessions_except_current
     end
@@ -555,7 +609,6 @@ class Clover < Roda
       rodauth.check_active_session unless rodauth.use_pat?
     else
       r.on "runtime" do
-        @is_runtime = true
         response.json = true
         response.skip_content_security_policy!
 

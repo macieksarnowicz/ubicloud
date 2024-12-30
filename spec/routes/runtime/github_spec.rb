@@ -14,14 +14,14 @@ RSpec.describe Clover, "github" do
     it "vm has no runner" do
       get "/runtime/github"
 
-      expect(last_response).to have_api_error(400, "invalid JWT format or claim in Authorization header")
+      expect(last_response).to have_runtime_error(400, "invalid JWT format or claim in Authorization header")
     end
 
     it "vm has runner but no repository" do
       GithubRunner.create_with_id(vm_id: vm.id, repository_name: "test", label: "ubicloud")
       get "/runtime/github"
 
-      expect(last_response).to have_api_error(400, "invalid JWT format or claim in Authorization header")
+      expect(last_response).to have_runtime_error(400, "invalid JWT format or claim in Authorization header")
     end
 
     it "vm has runner and repository" do
@@ -42,12 +42,12 @@ RSpec.describe Clover, "github" do
 
     post "/runtime/github/caches"
 
-    expect(last_response).to have_api_error(400, "Wrong parameters")
+    expect(last_response).to have_runtime_error(400, "Wrong parameters")
   end
 
   describe "cache endpoints" do
-    let(:repository) { GithubRepository.create_with_id(name: "test", default_branch: "main", access_key: "123") }
-    let(:installation) { GithubInstallation.create_with_id(installation_id: 123, name: "test-user", type: "User") }
+    let(:repository) { GithubRepository.create_with_id(name: "test", default_branch: "main", access_key: "123", installation:) }
+    let(:installation) { GithubInstallation.create_with_id(installation_id: 123, name: "test-user", type: "User", project: Project.create_with_id(name: "test")) }
     let(:runner) { GithubRunner.create_with_id(vm_id: create_vm.id, repository_name: "test", label: "ubicloud", repository_id: repository.id, workflow_job: {head_branch: "dev"}) }
     let(:url_presigner) { instance_double(Aws::S3::Presigner, presigned_request: "aa") }
     let(:blob_storage_client) { instance_double(Aws::S3::Client) }
@@ -67,7 +67,7 @@ RSpec.describe Clover, "github" do
           params = {key: key, version: version}.compact
           post "/runtime/github/caches", params
 
-          expect(last_response).to have_api_error(400, "Wrong parameters")
+          expect(last_response).to have_runtime_error(400, "Wrong parameters")
         end
       end
 
@@ -75,27 +75,27 @@ RSpec.describe Clover, "github" do
         runner.update(workflow_job: nil)
         post "/runtime/github/caches", {key: "k1", version: "v1", cacheSize: 100}
 
-        expect(last_response).to have_api_error(400, "No workflow job data available")
+        expect(last_response).to have_runtime_error(400, "No workflow job data available")
       end
 
       it "fails if cache is bigger than 10GB" do
         post "/runtime/github/caches", {key: "k1", version: "v1", cacheSize: 11 * 1024 * 1024 * 1024}
 
-        expect(last_response).to have_api_error(400, "The cache size is over the 10GB limit")
+        expect(last_response).to have_runtime_error(400, "The cache size is over the 10GB limit")
       end
 
       it "fails if the cache entry already exists" do
         GithubCacheEntry.create_with_id(key: "k1", version: "v1", scope: "dev", repository_id: repository.id, created_by: runner.id, committed_at: Time.now)
         post "/runtime/github/caches", {key: "k1", version: "v1", cacheSize: 100}
 
-        expect(last_response).to have_api_error(409, "A cache entry for dev scope already exists with k1 key and v1 version.")
+        expect(last_response).to have_runtime_error(409, "A cache entry for dev scope already exists with k1 key and v1 version.")
       end
 
       it "rollbacks inconsistent cache entry if a failure occurs in the middle" do
         expect(blob_storage_client).to receive(:create_multipart_upload).and_raise(CloverError.new(500, "UnexceptedError", "Sorry, we couldn’t process your request because of an unexpected error."))
         post "/runtime/github/caches", {key: "k1", version: "v1", cacheSize: 75 * 1024 * 1024}
 
-        expect(last_response).to have_api_error(500, "Sorry, we couldn’t process your request because of an unexpected error.")
+        expect(last_response).to have_runtime_error(500, "Sorry, we couldn’t process your request because of an unexpected error.")
         expect(repository.cache_entries).to be_empty
       end
 
@@ -162,7 +162,7 @@ RSpec.describe Clover, "github" do
           params = {etags: etags, uploadId: upload_id, size: size}.compact
           post "/runtime/github/caches/commit", params
 
-          expect(last_response).to have_api_error(400, "Wrong parameters")
+          expect(last_response).to have_runtime_error(400, "Wrong parameters")
         end
       end
 
@@ -177,7 +177,7 @@ RSpec.describe Clover, "github" do
         expect(blob_storage_client).to receive(:complete_multipart_upload).and_raise(Aws::S3::Errors::NoSuchUpload.new("error", "error"))
         post "/runtime/github/caches/commit", {etags: ["etag-1", "etag-2"], uploadId: "upload-id", size: 100}
 
-        expect(last_response).to have_api_error(400, "Wrong parameters")
+        expect(last_response).to have_runtime_error(400, "Wrong parameters")
       end
 
       it "completes multipart upload" do
@@ -214,7 +214,7 @@ RSpec.describe Clover, "github" do
           params = {keys: keys, version: version}.compact
           get "/runtime/github/cache", params
 
-          expect(last_response).to have_api_error(400, "Wrong parameters")
+          expect(last_response).to have_runtime_error(400, "Wrong parameters")
         end
       end
 
@@ -291,12 +291,26 @@ RSpec.describe Clover, "github" do
         GithubCacheEntry.create_with_id(key: "mix-dev-main-123", version: "v1", scope: "main", repository_id: repository.id, created_at: Time.now - 1, created_by: runner.id, committed_at: Time.now)
         GithubCacheEntry.create_with_id(key: "mix-prod-123", version: "v1", scope: "main", repository_id: repository.id, created_at: Time.now, created_by: runner.id, committed_at: Time.now)
 
-        expect(url_presigner).to receive(:presigned_url).with(:get_object, anything).and_return("http://presigned-url")
+        expect(url_presigner).to receive(:presigned_url).with(:get_object, anything).and_return("http://presigned-url").at_least(:once)
         get "/runtime/github/cache", {keys: "mix-dev-main-,mix-dev-,mix-", version: "v1"}
 
         expect(last_response.status).to eq(200)
         expect(JSON.parse(last_response.body).slice("cacheKey", "cacheVersion", "scope").values).to eq(["mix-dev-main-123", "v1", "main"])
         expect(GithubCacheEntry[key: "mix-dev-main-123", version: "v1", scope: "main"].last_accessed_by).to eq(runner.id)
+      end
+
+      it "returns cache from any scope if scope check is disabled" do
+        GithubCacheEntry.create_with_id(key: "mix-dev-123", version: "v1", scope: "main", repository_id: repository.id, created_at: Time.now - 2, created_by: runner.id, committed_at: Time.now)
+        GithubCacheEntry.create_with_id(key: "mix-dev-main-123", version: "v1", scope: "feature-b", repository_id: repository.id, created_at: Time.now - 1, created_by: runner.id, committed_at: Time.now)
+        GithubCacheEntry.create_with_id(key: "mix-prod-123", version: "v1", scope: "main", repository_id: repository.id, created_at: Time.now, created_by: runner.id, committed_at: Time.now)
+
+        expect(url_presigner).to receive(:presigned_url).with(:get_object, anything).and_return("http://presigned-url").at_least(:once)
+        installation.project.set_ff_access_all_cache_scopes(true)
+        get "/runtime/github/cache", {keys: "mix-dev-main-,mix-dev-,mix-", version: "v1"}
+
+        expect(last_response.status).to eq(200)
+        expect(JSON.parse(last_response.body).slice("cacheKey", "cacheVersion", "scope").values).to eq(["mix-dev-main-123", "v1", "feature-b"])
+        expect(GithubCacheEntry[key: "mix-dev-main-123", version: "v1", scope: "feature-b"].last_accessed_by).to eq(runner.id)
       end
 
       it "only does a prefix match on key, escapes LIKE metacharacters in submitted keys" do

@@ -3,6 +3,21 @@
 RSpec.describe UBID do
   let(:all_types) { described_class.constants.select { _1.start_with?("TYPE_") }.map { described_class.const_get(_1) } }
 
+  it ".generate_vanity_action_type supports creating vanity ubids for action types" do
+    expect(described_class.generate_vanity_action_type("Project:view").to_s).to eq "ttzzzzzzzz021gzzz0pj0v1ew0"
+    expect(described_class.generate_vanity_action_type("ObjectTag:add").to_s).to eq "ttzzzzzzzz021gzzzz0t00add0"
+  end
+
+  it ".generate_vanity_action_tag supports creating vanity ubids for action tags" do
+    expect(described_class.generate_vanity_action_tag("Vm:all").to_s).to eq "tazzzzzzzz021gzzzz0vm0a111"
+    expect(described_class.generate_vanity_action_tag("Member").to_s).to eq "tazzzzzzzz021gzzzz0member0"
+  end
+
+  it ".generate_vanity raises if prefix or suffix is too long" do
+    expect { described_class.generate_vanity("tt", "foo", "bar") }.to raise_error(RuntimeError)
+    expect { described_class.generate_vanity("tt", "fo", "barbazqu") }.to raise_error(RuntimeError)
+  end
+
   it "can set_bits" do
     expect(described_class.set_bits(0, 0, 7, 0xab)).to eq(0xab)
     expect(described_class.set_bits(0xab, 8, 12, 0xc)).to eq(0xcab)
@@ -279,5 +294,50 @@ RSpec.describe UBID do
 
   it "can be inspected" do
     expect(described_class.parse("vmqsknkzw5164hkfnt6z6zgjps").inspect).to eq("#<UBID:Vm @ubid=\"vmqsknkzw5164hkfnt6z6zgjps\" @uuid=\"be6759ff-8509-8b74-8cdf-5d1be6fc256c\">")
+  end
+
+  it ".resolve_map populates hash with uuid keys" do
+    page = Page.create_with_id(summary: "x", tag: "y")
+    a_type = ActionType.first
+    hash = {page.id => nil, a_type.id => nil}
+    described_class.resolve_map(hash)
+    expect(hash[page.id]).to eq page
+    expect(hash[a_type.id]).to eq a_type
+  end
+
+  it ".type_match? checks whether given ubid has given type" do
+    ubid = ActionType.first.ubid
+    expect(described_class.type_match?(ubid, described_class::TYPE_ACTION_TYPE)).to be true
+    expect(described_class.type_match?(ubid, described_class::TYPE_ETC)).to be false
+  end
+
+  it ".uuid_type_match? checks whether given uuid has given type" do
+    uuid = ActionType.first.id
+    expect(described_class.uuid_type_match?(uuid, described_class::TYPE_ACTION_TYPE)).to be true
+    expect(described_class.uuid_type_match?(uuid, described_class::TYPE_ETC)).to be false
+  end
+
+  it "#type_match? checks whether receiver has given type" do
+    ubid = described_class.from_uuidish(ActionType.first.id)
+    expect(ubid.type_match?(described_class::TYPE_ACTION_TYPE)).to be true
+    expect(ubid.type_match?(described_class::TYPE_ETC)).to be false
+  end
+
+  it ".class_match? checks whether given ubid has given class" do
+    ubid = ActionType.first.ubid
+    expect(described_class.class_match?(ubid, ActionType)).to be true
+    expect(described_class.class_match?(ubid, ApiKey)).to be false
+  end
+
+  it ".uuid_class_match? checks whether given uuid has given class" do
+    uuid = ActionType.first.id
+    expect(described_class.uuid_class_match?(uuid, ActionType)).to be true
+    expect(described_class.uuid_class_match?(uuid, ApiKey)).to be false
+  end
+
+  it "#class_match? checks whether receiver has given class" do
+    ubid = described_class.from_uuidish(ActionType.first.id)
+    expect(ubid.class_match?(ActionType)).to be true
+    expect(ubid.class_match?(ApiKey)).to be false
   end
 end

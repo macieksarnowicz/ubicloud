@@ -24,10 +24,20 @@ class Clover < Roda
       rack_response = Clover.call(env.merge("REQUEST_METHOD" => "GET", "PATH_INFO" => uri.path))
       flash.discard
       flash["referrer"] = referrer
+      env.delete("roda.session.serialized")
       rack_response[0] = response.status || 400
       request.halt rack_response
     else
       request.redirect referrer
     end
+  end
+
+  def omniauth_providers
+    @omniauth_providers ||= [
+      # :nocov:
+      Config.omniauth_google_id ? [:google, "Google"] : nil,
+      Config.omniauth_github_id ? [:github, "GitHub"] : nil
+      # :nocov:
+    ].compact
   end
 end

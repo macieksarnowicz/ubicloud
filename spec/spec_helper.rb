@@ -20,6 +20,8 @@ ENV["MAIL_DRIVER"] = "test"
 ENV["HETZNER_CONNECTION_STRING"] = "https://robot-ws.your-server.de"
 ENV["HETZNER_USER"] = "user1"
 ENV["HETZNER_PASSWORD"] = "pass"
+ENV["OMNIAUTH_GITHUB_ID"] = "1234567890"
+ENV["OMNIAUTH_GOOGLE_ID"] = "1234567890"
 require_relative "coverage_helper"
 require_relative "../loader"
 require "rspec"
@@ -30,6 +32,8 @@ require "webmock/rspec"
 Warning.ignore([:not_reached, :unused_var], /.*lib\/mail\/parser.*/)
 Warning.ignore([:mismatched_indentations], /.*lib\/stripe\/api_operations.*/)
 Warning.ignore([:unused_var], /.*lib\/aws-sdk-(s3|core)\/(endpoint_provider|cbor).*/)
+Warning.ignore(/URI::ABS_URI is obsolete/, /.*lib\/omniauth\/strategy\.rb/)
+Warning.ignore(/URI::RFC3986_PARSER.make_regexp is obsolete/, /.*lib\/capybara\/session\/config\.rb/)
 # https://github.com/prawnpdf/prawn/issues/1349
 Warning.ignore(/circular require considered harmful/, /.*lib\/prawn\/fonts\.rb/)
 
@@ -49,6 +53,11 @@ RSpec.configure do |config|
   # assertion/expectation library such as wrong or the stdlib/minitest
   # assertions if you prefer.
   config.expect_with :rspec do |expectations|
+    # Uncomment this if you want to see full differences between expected
+    # and actual values.  Very useful when debugging a case where the
+    # truncated expected and actual values are identical.
+    # expectations.max_formatted_output_length = nil
+
     # This option will default to `true` in RSpec 4. It makes the `description`
     # and `failure_message` of custom matchers include text for helper methods
     # defined using `chain`, e.g.:
