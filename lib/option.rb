@@ -48,12 +48,12 @@ module Option
     ["almalinux-9", "AlmaLinux 9"]
   ].map { |args| BootImage.new(*args) }.freeze
 
-  VmFamily = Struct.new(:name, :can_share_slice, :slice_overcommit_factor)
+  VmFamily = Struct.new(:name, :ui_descriptor, :visible, :can_share_slice, :slice_overcommit_factor)
   VmFamilies = [
-    ["standard", false, 1],
-    ["standard-gpu", false, 1],
-    ["burstable", true, 1],
-    ["basic", true, 4]
+    ["standard", "Dedicated CPU", true, false, 1],
+    ["standard-gpu", "Dedicated GPU", false, false, 1],
+    ["burstable", "Elastic CPU", true, true, 1],
+    ["basic", "Shared CPU", false, true, 4]
   ].map { |args| VmFamily.new(*args) }.freeze
 
   IoLimits = Struct.new(:max_ios_per_sec, :max_read_mbytes_per_sec, :max_write_mbytes_per_sec)
@@ -72,7 +72,7 @@ module Option
     VmSize.new("standard-gpu-#{_1}", "standard-gpu", _1 / 2, _1, _1 * 100, _1, (_1 * 5.34).to_i, [_1 * 30], NO_IO_LIMITS, false, true, "x64")
   }).concat([[2, 50], [2, 100]].map {
     storage_size_options = [_1[1] * 20 / 100, _1[1] * 40 / 100]
-    VmSize.new("burstable-#{_1[0]}x#{_1[1] * 4 / 100}", "burstable", _1[0] / 2, _1[0], _1[1], _1[1], _1[1] * 4 / 100, storage_size_options, NO_IO_LIMITS, false, false, "x64")
+    VmSize.new("burstable-#{_1[0]}x#{_1[1] * 4 / 100}", "burstable", _1[0] / 2, _1[0], _1[1], _1[1], _1[1] * 4 / 100, storage_size_options, NO_IO_LIMITS, true, false, "x64")
   }).concat([[2, 50], [2, 100]].map {
     storage_size_options = [_1[1] * 20 / 100, _1[1] * 40 / 100]
     VmSize.new("burstable-#{_1[0]}x#{_1[1] * 4 / 100}", "burstable", _1[0], _1[0], _1[1], _1[1], (_1[1] * 3.2 / 100).to_i, storage_size_options, NO_IO_LIMITS, false, false, "arm64")
@@ -84,7 +84,7 @@ module Option
     VmSize.new("basic-#{_1[0]}x#{_1[1] / 100}", "basic", _1[0] * 2, _1[0], _1[1], 0, (_1[1] * 0.8 / 100).to_i, storage_size_options, NO_IO_LIMITS, false, false, "arm64")
   }).freeze
 
-  PostgresSize = Struct.new(:location, :name, :vm_size, :flavor, :vcpu, :memory, :storage_size_options) do
+  PostgresSize = Struct.new(:location, :name, :vm_family, :vm_size, :flavor, :vcpu, :memory, :storage_size_options) do
     alias_method :display_name, :name
   end
   PostgresSizes = Option.postgres_locations.product([2, 4, 8, 16, 30, 60]).flat_map {
@@ -96,17 +96,17 @@ module Option
     storage_size_limiter = [4096, storage_size_options.last].min.fdiv(storage_size_options.last)
     storage_size_options.map! { |size| size * storage_size_limiter }
     [
-      PostgresSize.new(_1.name, "standard-#{_2}", "standard-#{_2}", PostgresResource::Flavor::STANDARD, _2, _2 * 4, storage_size_options),
-      PostgresSize.new(_1.name, "standard-#{_2}", "standard-#{_2}", PostgresResource::Flavor::PARADEDB, _2, _2 * 4, storage_size_options),
-      PostgresSize.new(_1.name, "standard-#{_2}", "standard-#{_2}", PostgresResource::Flavor::LANTERN, _2, _2 * 4, storage_size_options)
+      PostgresSize.new(_1.name, "standard-#{_2}", "standard", "standard-#{_2}", PostgresResource::Flavor::STANDARD, _2, _2 * 4, storage_size_options),
+      PostgresSize.new(_1.name, "standard-#{_2}", "standard", "standard-#{_2}", PostgresResource::Flavor::PARADEDB, _2, _2 * 4, storage_size_options),
+      PostgresSize.new(_1.name, "standard-#{_2}", "standard", "standard-#{_2}", PostgresResource::Flavor::LANTERN, _2, _2 * 4, storage_size_options)
     ]
   }.concat(Option.postgres_locations.product([[2, 2], [2, 4]]).flat_map {
     storage_size_options = [_2[1] * 16, _2[1] * 32, _2[1] * 64]
     storage_size_options.pop if _1.name == "leaseweb-wdc02"
     [
-      PostgresSize.new(_1.name, "burstable-#{_2[0]}x#{_2[1]}", "burstable-#{_2[0]}x#{_2[1]}", PostgresResource::Flavor::STANDARD, _2[0], _2[1], storage_size_options),
-      PostgresSize.new(_1.name, "burstable-#{_2[0]}x#{_2[1]}", "burstable-#{_2[0]}x#{_2[1]}", PostgresResource::Flavor::PARADEDB, _2[0], _2[1], storage_size_options),
-      PostgresSize.new(_1.name, "burstable-#{_2[0]}x#{_2[1]}", "burstable-#{_2[0]}x#{_2[1]}", PostgresResource::Flavor::LANTERN, _2[0], _2[1], storage_size_options)
+      PostgresSize.new(_1.name, "burstable-#{_2[0]}x#{_2[1]}", "burstable", "burstable-#{_2[0]}x#{_2[1]}", PostgresResource::Flavor::STANDARD, _2[0], _2[1], storage_size_options),
+      PostgresSize.new(_1.name, "burstable-#{_2[0]}x#{_2[1]}", "burstable", "burstable-#{_2[0]}x#{_2[1]}", PostgresResource::Flavor::PARADEDB, _2[0], _2[1], storage_size_options),
+      PostgresSize.new(_1.name, "burstable-#{_2[0]}x#{_2[1]}", "burstable", "burstable-#{_2[0]}x#{_2[1]}", PostgresResource::Flavor::LANTERN, _2[0], _2[1], storage_size_options)
     ]
   }).freeze
 
