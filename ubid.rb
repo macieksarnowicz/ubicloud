@@ -79,6 +79,7 @@ class UBID
   TYPE_ACTION_TAG = "ta"
   TYPE_OBJECT_TAG = "t0"
   TYPE_VM_HOST_SLICE = "vs"
+  TYPE_VM_HOST_CPU = "cp"
 
   # Common entropy-based type for everything else
   TYPE_ETC = "et"
