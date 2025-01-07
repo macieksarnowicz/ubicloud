@@ -5,7 +5,7 @@ class Prog::Vm::VmHostSliceNexus < Prog::Base
 
   semaphore :destroy, :start_after_host_reboot, :checkup
 
-  def self.assemble_with_host(name, vm_host, family:, allowed_cpus:, memory_gib:, type: "dedicated")
+  def self.assemble_with_host(name, vm_host, family:, allowed_cpus_bitmask:, memory_gib:, type: "dedicated")
     fail "Must provide a VmHost." if vm_host.nil?
     fail "Must provide slice name." if name.nil? || name.empty?
     fail "Must provide family name." if family.nil? || family.empty?
@@ -28,8 +28,7 @@ class Prog::Vm::VmHostSliceNexus < Prog::Base
         vm_host_id: vm_host.id
       ) { _1.id = ubid.to_uuid }
 
-      # This validates the cpuset and updates or related values
-      vm_host_slice.from_cpu_bitmask(VmHostSlice.cpuset_to_bitmask(allowed_cpus))
+      vm_host_slice.from_cpu_bitmask(allowed_cpus_bitmask)
 
       Strand.create(prog: "Vm::VmHostSliceNexus", label: "prep") { _1.id = vm_host_slice.id }
     end

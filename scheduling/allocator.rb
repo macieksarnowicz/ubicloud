@@ -326,38 +326,52 @@ module Scheduling::Allocator
       @request = request
       @vm_host_allocations = vm_host_allocations
 
-      @is_valid = can_allocate_slice?
+      @existing_slice = if @request.can_share_slice then select_existing_slice end
+    end
+
+    def is_valid
+      if @existing_slice
+        true
+      else
+        @vm_host_allocations.all? { _1.is_valid }
+      end
     end
 
     def utilization
-      # if we found an existing slice, return the desired utilization
-      # to make this a preferred choice
-      return @request.target_host_utilization unless @existing_slice.nil?
-
-      # otherwise, compute the score based on combined CPU and Memory utilization, as usual
-      util = @vm_host_allocations.map { _1.utilization }
-      util.sum.fdiv(util.size)
+      if @existing_slice
+        # if we found an existing slice, return the desired utilization
+        # to make this a preferred choice
+        @request.target_host_utilization
+      else
+        # otherwise, compute the score based on combined CPU and Memory utilization, as usual
+        util = @vm_host_allocations.map { _1.utilization }
+        util.sum.fdiv(util.size)
+      end
     end
 
     def update(vm, vm_host)
       slice_id = nil
 
       if @existing_slice.nil?
-        fail "BUGBUG: must have an allocated cpuset at this point" if @new_slice_allowed_cpus.nil?
+        DB.transaction do
+          # Update the host utilization
+          VmHost.dataset.where(id: vm_host.id).update(@vm_host_allocations.map { _1.get_vm_host_update }.reduce(&:merge))
 
-        st = Prog::Vm::VmHostSliceNexus.assemble_with_host(
-          "#{vm.family}_#{vm.inhost_name}",
-          vm_host,
-          family: vm.family,
-          allowed_cpus: @new_slice_allowed_cpus,
-          memory_gib: @request.memory_gib_for_cores,
-          type: vm.can_share_slice? ? "shared" : "dedicated"
-        )
+          requested_cpus = (vm_host.total_cpus / vm_host.total_cores) * @request.cores
+          cpus = select_cpuset(vm_host.id, requested_cpus)
+          cpu_bitmask = cpus.reduce(0) { |bitmask, num| bitmask | (1 << num) }
 
-        slice_id = st.subject.id
+          st = Prog::Vm::VmHostSliceNexus.assemble_with_host(
+            "#{vm.family}_#{vm.inhost_name}",
+            vm_host,
+            family: vm.family,
+            allowed_cpus_bitmask: cpu_bitmask,
+            memory_gib: @request.memory_gib_for_cores,
+            type: vm.can_share_slice? ? "shared" : "dedicated"
+          )
 
-        # Update the host utilization
-        VmHost.dataset.where(id: vm_host.id).update(@vm_host_allocations.map { _1.get_vm_host_update }.reduce(&:merge))
+          slice_id = st.subject.id
+        end
       else
         slice_id = @existing_slice.id
       end
@@ -366,56 +380,35 @@ module Scheduling::Allocator
       vm.update(vm_host_slice_id: slice_id)
     end
 
-    def can_allocate_slice?
-      if @request&.can_share_slice
-        vm_host = VmHost[@candidate_host[:vm_host_id]]
+    def select_cpuset(vm_host_id, n)
+      # select the cpuset for the new slice
+      cpus = VmHostCpu
+        .where(vm_host_id: vm_host_id, available: true)
+        .limit(n)
+        .select_map(:cpu_number)
 
-        # Try to find an existing slice with some room
-        @existing_slice = vm_host.vm_host_slices
-          .select {
-            (_1.used_cpu_percent + @request.cpu_percent_limit <= _1.total_cpu_percent) &&
-              (_1.used_memory_gib + @request.memory_gib <= _1.total_memory_gib) &&
-              (_1.cores == @request.cores) &&
-              (_1.family == @request.family)
-          }
-          .min_by { _1.used_cpu_percent }
-      end
+      # update the cpus to be unavailable
+      updated_rows = VmHostCpu
+        .where(vm_host_id: vm_host_id, cpu_number: cpus)
+        .update(available: false)
 
-      # if we did not find a sharable slice, try to find room for a new one
-      if @existing_slice.nil?
-        # only check host allocations if we are creating a new slice, otherwise
-        # we are not doing anything on the host
-        return false unless @vm_host_allocations.all? { _1.is_valid }
+      fail "failed to allocate cpus" if updated_rows != n
 
-        vm_host = VmHost[@candidate_host[:vm_host_id]]
+      cpus
+    end
 
-        # Build a map of used cpus
-        used_cpus = VmHostSlice.cpuset_to_bitmask(vm_host.cpuset)
-        vm_host.vm_host_slices.map do |slice|
-          used_cpus |= slice.to_cpu_bitmask
-        end
+    def select_existing_slice
+      vm_host = VmHost[@candidate_host[:vm_host_id]]
 
-        # Now find required number o(f cpus
-        requested_cpu_bitmask = 0
-        requested_cpus = (vm_host.total_cpus / vm_host.total_cores) * @request.cores
-        i = 0
-        while requested_cpus > 0 && i < vm_host.total_cpus
-          if (used_cpus & (1 << i)) == 0
-            requested_cpu_bitmask |= (1 << i)
-            requested_cpus -= 1
-          end
-          i += 1
-        end
-
-        # we could not allocate enough cpus to match the request
-        return false if requested_cpus > 0
-
-        @new_slice_allowed_cpus = VmHostSlice.bitmask_to_cpuset(requested_cpu_bitmask)
-      end
-
-      # if we are here, we either have found an existing slice or have found a cpuset for a new one
-      # either of those conditions is a success
-      true
+      # Try to find an existing slice with some room
+      vm_host.vm_host_slices
+        .select {
+          (_1.used_cpu_percent + @request.cpu_percent_limit <= _1.total_cpu_percent) &&
+            (_1.used_memory_gib + @request.memory_gib <= _1.total_memory_gib) &&
+            (_1.cores == @request.cores) &&
+            (_1.family == @request.family)
+        }
+        .min_by { _1.used_cpu_percent }
     end
   end
 
