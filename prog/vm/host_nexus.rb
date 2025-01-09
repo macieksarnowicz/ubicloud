@@ -63,7 +63,7 @@ class Prog::Vm::HostNexus < Prog::Base
       case st.prog
       when "LearnOs"
         os_version = st.exitval.fetch("os_version")
-        vm_host.update(os_version: os_version, accepts_slices: (os_version == "ubuntu-24.04"))
+        vm_host.update(os_version: os_version)
       when "LearnMemory"
         mem_gib = st.exitval.fetch("mem_gib")
         vm_host.update(total_mem_gib: mem_gib)

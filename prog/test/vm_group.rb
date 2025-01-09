@@ -5,13 +5,14 @@ require "net/ssh"
 DEFAULT_BOOT_IMAGE_NAMES = Option::BootImages.map { _1.name }.freeze
 
 class Prog::Test::VmGroup < Prog::Test::Base
-  def self.assemble(storage_encrypted: true, test_reboot: true, boot_images: DEFAULT_BOOT_IMAGE_NAMES)
+  def self.assemble(storage_encrypted: true, test_reboot: true, test_slices: false, boot_images: DEFAULT_BOOT_IMAGE_NAMES)
     Strand.create_with_id(
       prog: "Test::VmGroup",
       label: "start",
       stack: [{
         "storage_encrypted" => storage_encrypted,
         "test_reboot" => test_reboot,
+        "test_slices" => test_slices,
         "vms" => [],
         "boot_images" => boot_images
       }]
@@ -25,6 +26,7 @@ class Prog::Test::VmGroup < Prog::Test::Base
   label def setup_vms
     project = Project.create_with_id(name: "project-1")
     project.associate_with_project(project)
+    project.set_ff_use_slices_for_allocation(frame["test_slices"])
 
     subnet1_s = Prog::Vnet::SubnetNexus.assemble(
       project.id, name: "the-first-subnet", location: "hetzner-fsn1"
@@ -36,6 +38,7 @@ class Prog::Test::VmGroup < Prog::Test::Base
 
     storage_encrypted = frame.fetch("storage_encrypted", true)
     boot_images = frame.fetch("boot_images")
+    test_slices = frame.fetch("test_slices")
 
     vm1_s = Prog::Vm::Nexus.assemble_with_sshable(
       "ubi", project.id,
@@ -58,7 +61,8 @@ class Prog::Test::VmGroup < Prog::Test::Base
         max_ios_per_sec: 25600
       }],
       boot_image: boot_images.sample,
-      enable_ip4: true
+      enable_ip4: true,
+      size: test_slices ? "burstable-1" : "standard-2"
     )
 
     vm3_s = Prog::Vm::Nexus.assemble_with_sshable(
@@ -66,7 +70,8 @@ class Prog::Test::VmGroup < Prog::Test::Base
       private_subnet_id: subnet2_s.id,
       storage_volumes: [{encrypted: storage_encrypted, skip_sync: false}],
       boot_image: boot_images.sample,
-      enable_ip4: true
+      enable_ip4: true,
+      size: test_slices ? "burstable-2" : "standard-2"
     )
 
     update_stack({
@@ -85,10 +90,27 @@ class Prog::Test::VmGroup < Prog::Test::Base
 
   label def verify_vms
     if retval&.dig("msg") == "Verified VM!"
-      hop_verify_firewall_rules
+      hop_verify_vm_host_slices
     end
 
     push Prog::Test::Vm, {subject_id: frame["vms"].first}
+  end
+
+  label def verify_vm_host_slices
+    test_slices = frame.fetch("test_slices")
+
+    if !test_slices || retval&.dig("msg") == "Verified VM Host Slices!"
+      hop_verify_firewall_rules
+    end
+
+    slice1, slice2, slice3 = frame["vms"].map { Vm[_1].vm_host_slice }
+
+    if slice1.id == slice2.id || slice1.id == slice3.id
+      fail_test "Standard and Burstable instances placed in the same slice"
+    end
+    # slice2 and slice3 could be different or the same, we do not have control over that
+
+    push Prog::Test::VmHostSlices, {slice_standard: slice1.id, slice_burstable: slice2.id}
   end
 
   label def verify_firewall_rules

@@ -16,6 +16,18 @@ RSpec.describe Prog::Test::VmGroup do
       expect(vg_test).to receive(:update_stack).and_call_original
       expect { vg_test.setup_vms }.to hop("wait_vms")
     end
+
+    it "hops to wait_children_ready if test_slices" do
+      expect(vg_test).to receive(:update_stack).and_call_original
+      expect(vg_test).to receive(:frame).and_return(
+        "storage_encrypted" => true,
+        "test_reboot" => true,
+        "test_slices" => true,
+        "vms" => [],
+        "boot_images" => DEFAULT_BOOT_IMAGE_NAMES
+      ).at_least(:once)
+      expect { vg_test.setup_vms }.to hop("wait_vms")
+    end
   end
 
   describe "#wait_vms" do
@@ -40,7 +52,38 @@ RSpec.describe Prog::Test::VmGroup do
 
     it "hops to verify_firewall_rules if tests are done" do
       expect(vg_test.strand).to receive(:retval).and_return({"msg" => "Verified VM!"})
-      expect { vg_test.verify_vms }.to hop("verify_firewall_rules")
+      expect { vg_test.verify_vms }.to hop("verify_vm_host_slices")
+    end
+  end
+
+  describe "#verify_vm_host_slices" do
+    it "runs tests on vm host slices" do
+      expect(vg_test).to receive(:frame).and_return({"test_slices" => true, "vms" => ["111", "222", "333"]}).at_least(:once)
+      slice1 = instance_double(VmHostSlice, id: "456")
+      slice2 = instance_double(VmHostSlice, id: "789")
+      expect(Vm).to receive(:[]).with("111").and_return(instance_double(Vm, vm_host_slice: slice1))
+      expect(Vm).to receive(:[]).with("222").and_return(instance_double(Vm, vm_host_slice: slice2))
+      expect(Vm).to receive(:[]).with("333").and_return(instance_double(Vm, vm_host_slice: slice2))
+
+      expect { vg_test.verify_vm_host_slices }.to hop("start", "Test::VmHostSlices")
+    end
+
+    it "fails if standard and burstable instances are in the same slice" do
+      expect(vg_test).to receive(:frame).and_return({"test_slices" => true, "vms" => ["111", "222", "333"]}).at_least(:once)
+      slice1 = instance_double(VmHostSlice, id: "456")
+      slice2 = instance_double(VmHostSlice, id: "789")
+      expect(Vm).to receive(:[]).with("111").and_return(instance_double(Vm, vm_host_slice: slice1))
+      expect(Vm).to receive(:[]).with("222").and_return(instance_double(Vm, vm_host_slice: slice2))
+      expect(Vm).to receive(:[]).with("333").and_return(instance_double(Vm, vm_host_slice: slice1))
+
+      expect(vg_test).to receive(:fail_test).with("Standard and Burstable instances placed in the same slice")
+      expect { vg_test.verify_vm_host_slices }.to hop("start", "Test::VmHostSlices")
+    end
+
+    it "hops to verify_firewall_rules if tests are done" do
+      expect(vg_test).to receive(:frame).and_return({"test_slices" => true})
+      expect(vg_test.strand).to receive(:retval).and_return({"msg" => "Verified VM Host Slices!"})
+      expect { vg_test.verify_vm_host_slices }.to hop("verify_firewall_rules")
     end
   end
 
