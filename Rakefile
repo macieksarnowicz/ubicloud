@@ -13,9 +13,12 @@ auto_parallel_tests = lambda do
   use_auto_parallel_tests
 end
 
+ncpu = nil
 nproc = lambda do
+  return ncpu if ncpu
+  require "etc"
   # Limit to 6 processes, as higher number results in more time
-  `(nproc 2> /dev/null) || sysctl -n hw.logicalcpu`.to_i.clamp(1, 6).to_s
+  ncpu = Etc.nprocessors.clamp(1, 6).to_s
 end
 
 clone_test_database = lambda do
@@ -168,11 +171,11 @@ desc "Run specs in with coverage in unfrozen mode, and without coverage in froze
 task default: [:coverage, :frozen_spec]
 
 rspec = lambda do |env|
-  sh(env.merge("RACK_ENV" => "test", "FORCE_AUTOLOAD" => "1"), "bundle", "exec", "rspec", "spec")
+  sh(env.merge("RUBYOPT" => "-w", "RACK_ENV" => "test", "FORCE_AUTOLOAD" => "1"), "bundle", "exec", "rspec", "spec")
 end
 
 turbo_tests = lambda do |env|
-  sh(env.merge("RACK_ENV" => "test", "FORCE_AUTOLOAD" => "1"), "bundle", "exec", "turbo_tests", "-n", nproc.call)
+  sh(env.merge("RUBYOPT" => "-w", "RACK_ENV" => "test", "FORCE_AUTOLOAD" => "1"), "bundle", "exec", "turbo_tests", "-n", nproc.call)
 end
 
 spec = lambda do |env|
@@ -213,7 +216,7 @@ task "coverage_pspec" do
   Dir.mkdir("coverage") unless File.directory?("coverage")
   output_file = "coverage/output.txt"
   command = "bundle exec turbo_tests -n #{nproc.call} 2>&1 | tee #{output_file}"
-  sh({"RACK_ENV" => "test", "FORCE_AUTOLOAD" => "1", "COVERAGE" => "1"}, command)
+  sh({"RUBYOPT" => "-w", "RACK_ENV" => "test", "FORCE_AUTOLOAD" => "1", "COVERAGE" => "1"}, command)
   command_output = File.binread(output_file)
   unless command_output.include?("Line Coverage: 100.0%") && command_output.include?("Branch Coverage: 100.0%")
     warn "SimpleCov failed with exit 2 due to a coverage related error"
@@ -238,7 +241,7 @@ task :spec_separate do
 
   failures = []
   Dir["spec/**/*_spec.rb"].each do |file|
-    failures << file unless system(RbConfig.ruby, "-S", "rspec", file)
+    failures << file unless system(RbConfig.ruby, "-w", "-S", "rspec", file)
   end
 
   if failures.empty?

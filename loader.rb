@@ -21,10 +21,10 @@ Warning.ignore(/To use (retry|multipart) middleware with Faraday v2\.0\+, instal
 force_autoload = Config.production? || ENV["FORCE_AUTOLOAD"] == "1"
 Unreloader = Rack::Unreloader.new(reload: Config.development?, autoload: true) { Clover }
 
-Unreloader.autoload("#{__dir__}/db.rb") { "DB" }
+autoload :DB, "#{__dir__}/db.rb"
 Unreloader.autoload("#{__dir__}/ubid.rb") { "UBID" }
 
-AUTOLOAD_CONSTANTS = ["DB", "UBID"]
+AUTOLOAD_CONSTANTS = ["UBID"]
 
 # Set up autoloads using Unreloader using a style much like Zeitwerk:
 # directories are modules, file names are classes.
@@ -85,12 +85,14 @@ module Scheduling; end
 module Serializers; end
 
 autoload_normal.call("model", flat: true)
-%w[lib clover.rb clover_error.rb].each { autoload_normal.call(_1) }
+%w[lib clover.rb].each { autoload_normal.call(_1) }
 %w[scheduling prog serializers].each { autoload_normal.call(_1, include_first: true) }
 
 if ENV["LOAD_FILES_SEPARATELY_CHECK"] == "1"
   files = %w[model lib scheduling prog serializers].flat_map { Dir["#{_1}/**/*.rb"] }
-  files.concat(%w[clover.rb clover_error.rb])
+  files << "clover.rb"
+
+  Sequel::DATABASES.each(&:disconnect)
   files.each do |file|
     pid = fork do
       require_relative file
@@ -104,6 +106,11 @@ if ENV["LOAD_FILES_SEPARATELY_CHECK"] == "1"
 end
 
 AUTOLOAD_CONSTANTS.freeze
+
+Unreloader.record_dependency("lib/authorization.rb", "model")
+Unreloader.record_dependency("lib/health_monitor_methods.rb", "model")
+Unreloader.record_dependency("lib/resource_methods.rb", "model")
+Unreloader.record_dependency("lib/semaphore_methods.rb", "model")
 
 if force_autoload
   AUTOLOAD_CONSTANT_VALUES = AUTOLOAD_CONSTANTS.map { Object.const_get(_1) }.freeze
@@ -174,6 +181,7 @@ def clover_freeze
   Gem.source_date_epoch
 
   # Freeze all constants that are autoloaded
+  DB.freeze
   Sequel::Model.freeze_descendants
   AUTOLOAD_CONSTANT_VALUES.each(&:freeze)
   [

@@ -9,7 +9,6 @@ RSpec.describe Clover, "inference-token" do
 
   describe "feature enabled" do
     before do
-      project.set_ff_inference_ui(true)
       login(user.email)
       visit "#{project.path}/inference-token"
       expect(ApiKey.all).to be_empty
@@ -18,7 +17,7 @@ RSpec.describe Clover, "inference-token" do
     end
 
     it "inference token page allows creating inference tokens" do
-      expect(find_by_id("flash-notice").text).to include("Created inference token with id ")
+      expect(page).to have_flash_notice("Created inference token with id #{@api_key.ubid}")
 
       expect(ApiKey.count).to eq(1)
       expect(@api_key.owner_id).to eq(project.id)
@@ -40,24 +39,12 @@ RSpec.describe Clover, "inference-token" do
       expect(ApiKey.all).to be_empty
       expect(access_tag_ds.all).to be_empty
       visit "#{project.path}/user/token"
-      expect(find_by_id("flash-notice").text).to eq("Inference token deleted successfully")
+      expect(page).to have_flash_notice("Inference token deleted successfully")
 
       page.driver.delete data_url, {_csrf:}
       expect(page.status_code).to eq(204)
       visit "#{project.path}/user/token"
       expect(page.html).not_to include("Inference token deleted successfully")
-    end
-  end
-
-  describe "feature disabled" do
-    before do
-      project.set_ff_inference_ui(false)
-      login(user.email)
-      visit "#{project.path}/inference-token"
-    end
-
-    it "inference token page is not accessible" do
-      expect(page.status_code).to eq(404)
     end
   end
 

@@ -11,11 +11,28 @@ class Prog::Vnet::UpdateFirewallRules < Prog::Base
 
   label def update_firewall_rules
     rules = vm.firewalls.map(&:firewall_rules).flatten
-    allowed_ingress_ip4_port_set = consolidate_rules(rules.select { !_1.ip6? && _1.port_range })
-    allowed_ingress_ip6_port_set = consolidate_rules(rules.select { _1.ip6? && _1.port_range })
+    allowed_ingress_ip4_port_set, allowed_ingress_ip4_lb_dest_set = consolidate_rules(rules.select { !_1.ip6? && _1.port_range })
+    allowed_ingress_ip6_port_set, allowed_ingress_ip6_lb_dest_set = consolidate_rules(rules.select { _1.ip6? && _1.port_range })
     guest_ephemeral, clover_ephemeral = subdivide_network(vm.ephemeral_net6).map(&:to_s)
 
     globally_blocked_ipv4s, globally_blocked_ipv6s = generate_globally_blocked_lists
+
+    load_balancer_allow_rule = if vm.load_balancer
+      allow_ipv4_lb_neigh_incoming = "ip saddr . tcp sport { #{vm.load_balancer.vms.reject { _1.id == vm.id }.map { _1.nics.first.private_ipv4.network.to_s + " . " + vm.load_balancer.src_port.to_s }.join(", ")} } ct state established,related,new counter accept" if vm.load_balancer.vms.reject { _1.id == vm.id }.any?
+      allow_ipv6_lb_neigh_incoming = "ip6 saddr . tcp sport { #{vm.load_balancer.vms.reject { _1.id == vm.id }.map { _1.nics.first.private_ipv6.nth(2).to_s + " . " + vm.load_balancer.src_port.to_s }.join(", ")} } ct state established,related,new counter accept" if vm.load_balancer.vms.reject { _1.id == vm.id }.any?
+      <<~LOAD_BALANCER_ALLOW_RULE
+#{allow_ipv4_lb_neigh_incoming}
+#{allow_ipv6_lb_neigh_incoming}
+
+# The traffic that is routed to the local VM from the load balancer
+# is marked with 0x00B1C100D. We need to allow this traffic to
+# the local VM.
+meta mark 0x00B1C100D ip saddr . tcp dport @allowed_ipv4_lb_dest_set ct state established,related,new counter accept
+meta mark 0x00B1C100D ip6 saddr . tcp dport @allowed_ipv6_lb_dest_set ct state established,related,new counter accept
+      LOAD_BALANCER_ALLOW_RULE
+    else
+      ""
+    end
 
     vm.vm_host.sshable.cmd("sudo ip netns exec #{vm.inhost_name} nft --file -", stdin: <<TEMPLATE)
 # An nftables idiom for idempotent re-create of a named entity: merge
@@ -30,10 +47,22 @@ table inet fw_table {
 #{allowed_ingress_ip4_port_set.empty? ? "" : "elements = {#{allowed_ingress_ip4_port_set}}"}
   }
 
+  set allowed_ipv4_lb_dest_set {
+    type ipv4_addr . inet_service;
+    flags interval;
+#{allowed_ingress_ip4_lb_dest_set.empty? ? "" : "elements = {#{allowed_ingress_ip4_lb_dest_set}}"}
+  }
+
   set allowed_ipv6_port_tuple {
     type ipv6_addr . inet_service;
     flags interval;
 #{allowed_ingress_ip6_port_set.empty? ? "" : "elements = {#{allowed_ingress_ip6_port_set}}"}
+  }
+
+  set allowed_ipv6_lb_dest_set {
+    type ipv6_addr . inet_service;
+    flags interval;
+#{allowed_ingress_ip6_lb_dest_set.empty? ? "" : "elements = {#{allowed_ingress_ip6_lb_dest_set}}"}
   }
 
   set private_ipv4_cidrs {
@@ -129,6 +158,9 @@ table inet fw_table {
     ip6 daddr ::/0 icmpv6 type echo-request counter accept
     ip6 saddr ::/0 icmpv6 type echo-reply counter accept
     ip6 daddr ::/0 icmpv6 type echo-reply counter accept
+
+    # Allow load balancer traffic
+#{load_balancer_allow_rule}
   }
 }
 TEMPLATE
@@ -207,13 +239,20 @@ TEMPLATE
     end
 
     combined_rules = combine_continuous_ranges_for_same_subnet(consolidated_rules)
-    combined_rules.map do |r|
+    combined_rules_self = combined_rules.map do |r|
       if r.port_range[:begin] != r.port_range[:end] - 1
         "#{r.cidr} . #{r.port_range[:begin]}-#{r.port_range[:end] - 1}"
       else
         "#{r.cidr} . #{r.port_range[:begin]}"
       end
     end.join(",")
+
+    combined_rules_lb_dest = vm.load_balancer ? combined_rules.filter_map do |r|
+      if r.port_range[:begin] <= vm.load_balancer.src_port && vm.load_balancer.src_port <= r.port_range[:end] - 1
+        "#{r.cidr} . #{vm.load_balancer.dst_port}"
+      end
+    end.join(",") : []
+    [combined_rules_self, combined_rules_lb_dest]
   end
 
   def combine_continuous_ranges_for_same_subnet(rules)

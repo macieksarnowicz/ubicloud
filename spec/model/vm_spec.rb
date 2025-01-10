@@ -16,6 +16,11 @@ RSpec.describe Vm do
       expect(vm.display_state).to eq("restarting")
     end
 
+    it "returns stopped if stop semaphore increased" do
+      expect(vm).to receive(:semaphores).and_return([instance_double(Semaphore, name: "stop")]).at_least(:once)
+      expect(vm.display_state).to eq("stopped")
+    end
+
     it "returns waiting for capacity if semaphore increased" do
       expect(vm).to receive(:semaphores).and_return([instance_double(Semaphore, name: "waiting_for_capacity")]).at_least(:once)
       expect(vm.display_state).to eq("waiting for capacity")
@@ -229,22 +234,6 @@ RSpec.describe Vm do
 
     it "can compute nil if ipv4 is not assigned" do
       expect(vm.ephemeral_net4).to be_nil
-    end
-  end
-
-  describe "#billing_record_parts" do
-    it "returns correct value for standard family" do
-      vm.family = "standard"
-      vm.cores = 1
-      vm.cpu_percent_limit = 200
-      expect(vm.billing_record_parts).to eq({resource_type: "VmCores", amount: 1})
-    end
-
-    it "returns correct value for burstable family" do
-      vm.family = "burstable"
-      vm.cores = 1
-      vm.cpu_percent_limit = 50
-      expect(vm.billing_record_parts).to eq({resource_type: "VmCpuPercent", amount: 0.5})
     end
   end
 

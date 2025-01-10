@@ -76,7 +76,7 @@ RSpec.describe Clover, "private subnet" do
         click_button "Create"
 
         expect(page.title).to eq("Ubicloud - #{name}")
-        expect(page).to have_content "'#{name}' will be ready in a few seconds"
+        expect(page).to have_flash_notice("'#{name}' will be ready in a few seconds")
         expect(PrivateSubnet.count).to eq(1)
         expect(PrivateSubnet.first.projects.first.id).to eq(project.id)
       end
@@ -93,7 +93,7 @@ RSpec.describe Clover, "private subnet" do
         click_button "Create"
 
         expect(page.title).to eq("Ubicloud - Create Private Subnet")
-        expect(page).to have_content "name is already taken"
+        expect(page).to have_flash_error("project_id and name is already taken")
       end
     end
 
@@ -185,6 +185,36 @@ RSpec.describe Clover, "private subnet" do
         click_button "Connect"
 
         expect(private_subnet.reload.connected_subnets.count).to eq(1)
+      end
+
+      it "cannot connect to a subnet when it does not exist" do
+        private_subnet
+        ps2 = Prog::Vnet::SubnetNexus.assemble(project.id, name: "dummy-ps-2", location: "hetzner-fsn1").subject
+        visit "#{project.path}#{private_subnet.path}"
+        ps2.strand.destroy
+        ps2.destroy
+        select "dummy-ps-2", from: "connected-subnet-ubid"
+        click_button "Connect"
+
+        expect(page).to have_flash_error("Subnet to be connected not found")
+      end
+
+      it "cannot disconnect a subnet when it does not exist" do
+        private_subnet
+        ps2 = Prog::Vnet::SubnetNexus.assemble(project.id, name: "dummy-ps-2", location: "hetzner-fsn1").subject
+        private_subnet.connect_subnet(ps2)
+        visit "#{project.path}#{private_subnet.path}"
+        small_id, large_id = (private_subnet.id < ps2.id) ? [private_subnet.id, ps2.id] : [ps2.id, private_subnet.id]
+        ConnectedSubnet.where(subnet_id_1: small_id, subnet_id_2: large_id).destroy
+        ps2.semaphores.map(&:destroy)
+        ps2.strand.destroy
+        ps2.destroy
+
+        btn = find "#cps-delete-#{ps2.ubid} .delete-btn"
+        page.driver.post btn["data-url"], {_csrf: btn["data-csrf"]}
+
+        expect(page.status_code).to eq(400)
+        expect(page.body).to eq({error: {message: "Subnet to be disconnected not found"}}.to_json)
       end
     end
 

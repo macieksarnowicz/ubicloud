@@ -12,7 +12,8 @@ RSpec.describe Prog::Test::HetznerServer do
     allow(Config).to receive(:ci_hetzner_sacrificial_server_id).and_return("1.1.1.1")
     allow(hs_test).to receive_messages(frame: {"vm_host_id" => vm_host.id,
                                                "hetzner_ssh_keypair" => "oOtAbOGFVHJjFyeQBgSfghi+YBuyQzBRsKABGZhOmDpmwxqx681mscsGBLaQ\n2iWQsOYBBVLDtQWe/gf3NRNyBw==\n",
-                                               "server_id" => "1234"}, hetzner_api: hetzner_api, vm_host: vm_host)
+                                               "server_id" => "1234",
+                                               "setup_host" => true}, hetzner_api: hetzner_api, vm_host: vm_host)
   }
 
   describe "#assemble" do
@@ -26,13 +27,13 @@ RSpec.describe Prog::Test::HetznerServer do
       st = described_class.assemble(vm_host_id: vm_host.id)
       expect(st.stack.first["vm_host_id"]).to eq(vm_host.id)
       expect(st.stack.first["hostname"]).to eq("1.1.1.1")
-      expect(st.stack.first["destroy"]).to be(false)
+      expect(st.stack.first["setup_host"]).to be(false)
     end
   end
 
   describe "#start" do
-    it "hops to fetch_hostname if vm_host_id is not given" do
-      expect(hs_test).to receive(:frame).and_return({})
+    it "hops to fetch_hostname if setup_host is true" do
+      expect(hs_test).to receive(:frame).and_return({"setup_host" => true})
       expect { hs_test.start }.to hop("fetch_hostname")
     end
 
@@ -52,26 +53,26 @@ RSpec.describe Prog::Test::HetznerServer do
   describe "#add_ssh_key" do
     it "can add ssh key" do
       expect(hetzner_api).to receive(:add_key)
-      expect { hs_test.add_ssh_key }.to hop("reset")
+      expect { hs_test.add_ssh_key }.to hop("reimage")
     end
   end
 
-  describe "#reset" do
-    it "can reset" do
-      expect(hetzner_api).to receive(:reset).with("1234", dist: "Ubuntu 24.04 LTS base", hetzner_ssh_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGbDGrHrzWaxywYEtpDaJZCw5gEFUsO1BZ7+B/c1E3IH")
-      expect { hs_test.reset }.to hop("wait_reset")
+  describe "#reimage" do
+    it "can reimage" do
+      expect(hetzner_api).to receive(:reimage).with("1234", dist: "Ubuntu 24.04 LTS base", hetzner_ssh_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGbDGrHrzWaxywYEtpDaJZCw5gEFUsO1BZ7+B/c1E3IH")
+      expect { hs_test.reimage }.to hop("wait_reimage")
     end
   end
 
-  describe "#wait_reset" do
+  describe "#wait_reimage" do
     it "hops to setup_host if the server is up" do
       expect(Util).to receive(:rootish_ssh)
-      expect { hs_test.wait_reset }.to hop("setup_host")
+      expect { hs_test.wait_reimage }.to hop("setup_host")
     end
 
     it "naps if the server is not up yet" do
       expect(Util).to receive(:rootish_ssh).and_raise RuntimeError, "ssh failed"
-      expect { hs_test.wait_reset }.to nap(15)
+      expect { hs_test.wait_reimage }.to nap(15)
     end
   end
 
@@ -95,9 +96,17 @@ RSpec.describe Prog::Test::HetznerServer do
       expect { hs_test.wait_setup_host }.to hop("run_integration_specs")
     end
 
-    it "installs rhizome if not installed yet with specs" do
+    it "verifies specs haven't been installed when we setup the host & installs rhizome with specs" do
+      expect(hs_test).to receive(:frame).and_return({"setup_host" => true})
       expect(vm_host.strand).to receive(:label).and_return("wait")
       expect(hs_test).to receive(:verify_specs_installation).with(installed: false)
+      expect { hs_test.wait_setup_host }.to hop("start", "InstallRhizome")
+    end
+
+    it "doesn't verify specs not installed if we didn't setup the host" do
+      expect(hs_test).to receive(:frame).and_return({"setup_host" => false})
+      expect(vm_host.strand).to receive(:label).and_return("wait")
+      expect(hs_test).not_to receive(:verify_specs_installation)
       expect { hs_test.wait_setup_host }.to hop("start", "InstallRhizome")
     end
   end
@@ -150,7 +159,7 @@ RSpec.describe Prog::Test::HetznerServer do
     end
 
     it "deletes key and vm host" do
-      expect(hs_test).to receive(:frame).and_return({"destroy" => true})
+      expect(hs_test).to receive(:frame).and_return({"setup_host" => true})
       expect(hetzner_api).to receive(:delete_key).with("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGbDGrHrzWaxywYEtpDaJZCw5gEFUsO1BZ7+B/c1E3IH")
       expect(vm_host).to receive(:incr_destroy)
       expect { hs_test.destroy }.to hop("wait_vm_host_destroyed")

@@ -31,7 +31,7 @@ class Project < Sequel::Model
   dataset_module Authorization::Dataset
   dataset_module Pagination
 
-  plugin :association_dependencies, access_tags: :destroy, access_policies: :destroy, billing_info: :destroy, github_installations: :destroy, api_keys: :destroy
+  plugin :association_dependencies, access_tags: :destroy, access_policies: :destroy, billing_info: :destroy, github_installations: :destroy, api_keys: :destroy, access_control_entries: :destroy, subject_tags: :destroy, action_tags: :destroy, object_tags: :destroy
 
   include ResourceMethods
   include Authorization::HyperTagMethods
@@ -114,9 +114,9 @@ class Project < Sequel::Model
 
   def current_resource_usage(resource_type)
     case resource_type
-    when "VmCores" then vms.sum(&:cores)
-    when "GithubRunnerCores" then github_installations.sum(&:total_active_runner_cores)
-    when "PostgresCores" then postgres_resources.flat_map { _1.servers.map { |s| s.vm.cores } }.sum
+    when "VmVCpu" then vms.sum(&:vcpus)
+    when "GithubRunnerVCpu" then github_installations.sum(&:total_active_runner_vcpus)
+    when "PostgresVCpu" then postgres_resources.flat_map { _1.servers.map { |s| s.vm.vcpus } }.sum
     else
       raise "Unknown resource type: #{resource_type}"
     end
@@ -159,7 +159,7 @@ class Project < Sequel::Model
     end
   end
 
-  feature_flag :postgresql_base_image, :vm_public_ssh_keys, :transparent_cache, :location_latitude_fra, :inference_ui, :access_all_cache_scopes, :use_slices_for_allocation, :enable_diagnostics
+  feature_flag :postgresql_base_image, :vm_public_ssh_keys, :transparent_cache, :location_latitude_fra, :access_all_cache_scopes, :use_slices_for_allocation, :enable_diagnostics
 end
 
 # Table: project

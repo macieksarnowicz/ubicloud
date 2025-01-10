@@ -31,7 +31,7 @@ RSpec.describe Clover, "billing" do
 
     visit "#{project.path}/billing"
     expect(page.status_code).to eq(501)
-    expect(page).to have_content "Billing is not enabled. Set STRIPE_SECRET_KEY to enable billing."
+    expect(page.body).to eq "Billing is not enabled. Set STRIPE_SECRET_KEY to enable billing."
   end
 
   it "tag payment method fraud after account suspension" do
@@ -101,7 +101,7 @@ RSpec.describe Clover, "billing" do
       click_button "Add new billing information"
 
       expect(page.status_code).to eq(200)
-      expect(page).to have_content("We couldn't pre-authorize your card for verification. Please make sure it can be pre-authorized up to $5 or contact our support team at support@ubicloud.com.")
+      expect(page).to have_flash_error("We couldn't pre-authorize your card for verification. Please make sure it can be pre-authorized up to $5 or contact our support team at support@ubicloud.com.")
     end
 
     it "can update billing info" do
@@ -124,6 +124,24 @@ RSpec.describe Clover, "billing" do
       expect(page).to have_field("Billing Name", with: "New Inc.")
       expect(page).to have_field("Country", with: "US")
       expect(page).to have_field("Tax ID (Optional)", with: "456789")
+    end
+
+    it "shows error if billing info update failed" do
+      expect(Stripe::Customer).to receive(:retrieve).with(billing_info.stripe_id).and_return(
+        {"name" => "Old Inc.", "address" => {"country" => "NL"}, "metadata" => {"tax_id" => "123456"}},
+        {"name" => "New Inc.", "address" => {"country" => "US"}, "metadata" => {"tax_id" => "456789"}}
+      ).twice
+      expect(Stripe::Customer).to receive(:update).and_raise(Stripe::InvalidRequestError.new("Invalid email address:    test@test.com", "email"))
+
+      visit "#{project.path}/billing"
+
+      expect(page.title).to eq("Ubicloud - Project Billing")
+      fill_in "Billing Email", with: "  test@test.com"
+
+      click_button "Update"
+
+      expect(page.status_code).to eq(200)
+      expect(page).to have_flash_error("Invalid email address: test@test.com")
     end
 
     it "can add new payment method" do
@@ -167,7 +185,7 @@ RSpec.describe Clover, "billing" do
       expect(page.title).to eq("Ubicloud - Project Billing")
       expect(billing_info.payment_methods.count).to eq(1)
       expect(page).to have_content "Visa"
-      expect(page).to have_content("Payment method you added is labeled as fraud. Please contact support.")
+      expect(page).to have_flash_error("Payment method you added is labeled as fraud. Please contact support.")
     end
 
     it "raises not found when payment method not exists" do
@@ -229,7 +247,7 @@ RSpec.describe Clover, "billing" do
           resource_id: vm.id,
           resource_name: vm.name,
           span: Sequel::Postgres::PGRange.new(begin_time, end_time),
-          billing_rate_id: BillingRate.from_resource_properties("VmCores", vm.family, vm.location)["id"],
+          billing_rate_id: BillingRate.from_resource_properties("VmVCpu", vm.family, vm.location)["id"],
           amount: vm.cores
         )
       end

@@ -48,12 +48,12 @@ module Option
     ["almalinux-9", "AlmaLinux 9"]
   ].map { |args| BootImage.new(*args) }.freeze
 
-  VmFamily = Struct.new(:name, :can_share_slice, :slice_overcommit_factor, :billing_resource_type)
+  VmFamily = Struct.new(:name, :can_share_slice, :slice_overcommit_factor)
   VmFamilies = [
-    ["standard", false, 1, "VmCores"],
-    ["standard-gpu", false, 1, "VmCores"],
-    ["burstable", true, 1, "VmCpuPercent"],
-    ["basic", true, 4, "VmCpuPercent"]
+    ["standard", false, 1],
+    ["standard-gpu", false, 1],
+    ["burstable", true, 1],
+    ["basic", true, 4]
   ].map { |args| VmFamily.new(*args) }.freeze
 
   IoLimits = Struct.new(:max_ios_per_sec, :max_read_mbytes_per_sec, :max_write_mbytes_per_sec)
@@ -84,11 +84,11 @@ module Option
     VmSize.new("basic-#{_1[0]}x#{_1[1] / 100}", "basic", _1[0] * 2, _1[0], _1[1], 0, (_1[1] * 0.8 / 100).to_i, storage_size_options, NO_IO_LIMITS, false, false, "arm64")
   }).freeze
 
-  PostgresSize = Struct.new(:location, :name, :vm_size, :family, :vcpu, :memory, :storage_size_options) do
+  PostgresSize = Struct.new(:location, :name, :vm_size, :flavor, :vcpu, :memory, :storage_size_options) do
     alias_method :display_name, :name
   end
   PostgresSizes = Option.postgres_locations.product([2, 4, 8, 16, 30, 60]).flat_map {
-    storage_size_options = [_2 * 64, _2 * 128, _2 * 256]
+    storage_size_options = [_2 * 32, _2 * 64, _2 * 128]
     storage_size_options.map! { |size| size / 15 * 16 } if [30, 60].include?(_2)
 
     storage_size_options.pop if _1.name == "leaseweb-wdc02"
@@ -122,9 +122,4 @@ module Option
     PostgresResource::Flavor::PARADEDB => ["16", "17"],
     PostgresResource::Flavor::LANTERN => ["16"]
   }
-
-  POSTGRES_BILLING_RESOURCE_TYPES = {
-    "VmCores" => {primary: "PostgresCores", standby: "PostgresStandbyCores"},
-    "VmCpuPercent" => {primary: "PostgresCpuPercent", standby: "PostgresStandbyCpuPercent"}
-  }.freeze
 end

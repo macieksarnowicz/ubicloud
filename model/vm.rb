@@ -26,7 +26,7 @@ class Vm < Sequel::Model
   include SemaphoreMethods
   include HealthMonitorMethods
   semaphore :destroy, :start_after_host_reboot, :prevent_destroy, :update_firewall_rules, :checkup, :update_spdk_dependency, :waiting_for_capacity, :lb_expiry_started
-  semaphore :restart
+  semaphore :restart, :stop
 
   include Authorization::HyperTagMethods
 
@@ -63,6 +63,7 @@ class Vm < Sequel::Model
   def display_state
     return "deleting" if destroy_set? || strand&.label == "destroy"
     return "restarting" if restart_set? || strand&.label == "restart"
+    return "stopped" if stop_set? || strand&.label == "stopped"
     if waiting_for_capacity_set?
       return "no capacity available" if Time.now - created_at > 15 * 60
       return "waiting for capacity"
@@ -162,24 +163,6 @@ class Vm < Sequel::Model
 
   def storage_size_gib
     vm_storage_volumes.map { _1.size_gib }.sum
-  end
-
-  def billing_record_parts
-    billing_resource_type = Option::VmFamilies.find { _1.name == family }.billing_resource_type
-
-    amount = 0
-    case billing_resource_type
-    when "VmCpuPercent"
-      amount = cpu_percent_limit / 100.0
-    when "VmCores"
-      amount = cores
-    else
-      # :nocov:
-      fail "BUG: Unknown billing resource type: #{billing_resource_type}"
-      # :nocov:
-    end
-
-    {resource_type: billing_resource_type, amount: amount}
   end
 
   def init_health_monitor_session

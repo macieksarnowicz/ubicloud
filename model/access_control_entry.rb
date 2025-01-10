@@ -3,7 +3,37 @@
 require_relative "../model"
 
 class AccessControlEntry < Sequel::Model
+  many_to_one :project
+
   include ResourceMethods
+
+  # use __id__ if you want the internal object id
+  def_column_alias :object_id, :object_id
+
+  def validate
+    if project_id
+      {subject_id:, action_id:, object_id:}.each do |field, value|
+        next unless value
+        ubid = UBID.from_uuidish(value).to_s
+
+        model = case field
+        when :subject_id
+          SubjectTag
+        when :action_id
+          ActionTag
+        else
+          ObjectTag
+        end
+
+        object = ubid.start_with?("et") ? ApiKey.with_pk(value) : UBID.decode(ubid)
+        unless model.valid_member?(project_id, object)
+          errors.add(field, "is not related to this project")
+        end
+      end
+    end
+
+    super
+  end
 end
 
 # Table: access_control_entry

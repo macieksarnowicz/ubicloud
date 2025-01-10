@@ -51,7 +51,7 @@ RSpec.describe Prog::Vm::Nexus do
       allow(_1).to receive(:active_billing_records).and_return([BillingRecord.new(
         project_id: "50089dcf-b472-8ad2-9ca6-b3e70d12759d",
         resource_name: _1.name,
-        billing_rate_id: BillingRate.from_resource_properties("VmCores", _1.family, _1.location)["id"],
+        billing_rate_id: BillingRate.from_resource_properties("VmVCpu", _1.family, _1.location)["id"],
         amount: _1.cores
       )])
     }
@@ -674,6 +674,11 @@ RSpec.describe Prog::Vm::Nexus do
       expect { nx.wait }.to hop("restart")
     end
 
+    it "hops to stopped when needed" do
+      expect(nx).to receive(:when_stop_set?).and_yield
+      expect { nx.wait }.to hop("stopped")
+    end
+
     it "hops to unavailable based on the vm's available status" do
       expect(nx).to receive(:when_checkup_set?).and_yield
       expect(nx).to receive(:available?).and_return(false)
@@ -722,6 +727,23 @@ RSpec.describe Prog::Vm::Nexus do
       expect(nx).to receive(:decr_restart)
       expect(sshable).to receive(:cmd).with("sudo systemctl restart #{vm.inhost_name}")
       expect { nx.restart }.to hop("wait")
+    end
+  end
+
+  describe "#stopped" do
+    it "naps after stopping the vm" do
+      sshable = instance_double(Sshable)
+      expect(nx).to receive(:when_stop_set?).and_yield
+      expect(vm).to receive(:vm_host).and_return(instance_double(VmHost, sshable: sshable))
+      expect(sshable).to receive(:cmd).with("sudo systemctl stop #{vm.inhost_name}")
+      expect(nx).to receive(:decr_stop)
+      expect { nx.stopped }.to nap(60 * 60)
+    end
+
+    it "does not stop if already stopped" do
+      expect(vm).not_to receive(:vm_host)
+      expect(nx).to receive(:decr_stop)
+      expect { nx.stopped }.to nap(60 * 60)
     end
   end
 
@@ -831,7 +853,7 @@ RSpec.describe Prog::Vm::Nexus do
       it "naps for 30 seconds" do
         lb = instance_double(LoadBalancer)
         expect(lb).to receive(:evacuate_vm).with(vm)
-        expect(vm).to receive(:load_balancer).and_return(lb)
+        expect(vm).to receive(:load_balancer).and_return(lb).at_least(:once)
         expect(vm).to receive(:incr_lb_expiry_started)
         expect { nx.wait_lb_expiry }.to nap(30)
       end
@@ -847,7 +869,6 @@ RSpec.describe Prog::Vm::Nexus do
 
       it "destroys properly after 10 minutes if the lb is gone" do
         expect(vm).to receive(:load_balancer).and_return(nil)
-        expect(vm).to receive(:lb_expiry_started_set?).and_return(true)
         expect(vm.vm_host.sshable).to receive(:cmd).with(/sudo.*bin\/setup-vm delete_net #{nx.vm_name}/)
         expect { nx.wait_lb_expiry }.to hop("destroy_slice")
       end

@@ -38,9 +38,10 @@ RSpec.describe Prog::Vm::HostNexus do
       expect(st.subject.provider).to be_nil
     end
 
-    it "creates addresses properly for a hetzner host" do
+    it "creates addresses properly and sets the server name for a hetzner host" do
       expect(Hosting::Apis).to receive(:pull_ips).and_return(hetzner_ips)
       expect(Hosting::Apis).to receive(:pull_data_center).and_return("fsn1-dc14")
+      expect(Hosting::Apis).to receive(:set_server_name).and_return(nil)
       st = described_class.assemble("127.0.0.1", provider: "hetzner", hetzner_server_identifier: "1")
       expect(st).to be_a Strand
       expect(st.label).to eq("start")
@@ -51,6 +52,15 @@ RSpec.describe Prog::Vm::HostNexus do
       expect(st.subject.assigned_host_addresses.first.ip.to_s).to eq("127.0.0.1/32")
       expect(st.subject.provider).to eq("hetzner")
       expect(st.subject.data_center).to eq("fsn1-dc14")
+    end
+
+    it "does not set the server name in development" do
+      expect(Config).to receive(:development?).and_return(true)
+      expect(Hosting::Apis).to receive(:pull_ips).and_return(hetzner_ips)
+      expect(Hosting::Apis).to receive(:pull_data_center).and_return("fsn1-dc14")
+      expect(Hosting::Apis).not_to receive(:set_server_name)
+
+      described_class.assemble("127.0.0.1", provider: "hetzner", hetzner_server_identifier: "1")
     end
   end
 

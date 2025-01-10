@@ -28,8 +28,9 @@ RETURNING lease
 SQL
     return false unless affected
     lease_time = affected.fetch(:lease)
+    verbose_logging = rand(1000) == 0
 
-    Clog.emit("obtained lease") { {lease_acquired: {time: lease_time, delay: Time.now - schedule}} }
+    Clog.emit("obtained lease") { {lease_acquired: {time: lease_time, delay: Time.now - schedule}} } if verbose_logging
     reload
 
     begin
@@ -47,7 +48,7 @@ UPDATE strand
 SET lease = NULL
 WHERE id = ? AND lease = ?
 SQL
-          Clog.emit("lease cleared") { {lease_cleared: {num_updated: num_updated}} }
+          Clog.emit("lease cleared") { {lease_cleared: {num_updated: num_updated}} } if verbose_logging
           unless num_updated == 1
             Clog.emit("lease violated data") do
               {lease_clear_debug_snapshot: lease_clear_debug_snapshot}
@@ -79,7 +80,6 @@ SQL
   def unsynchronized_run
     start_time = Time.now
     prog_label = "#{prog}.#{label}"
-    Clog.emit("starting strand") { [self, {strand_started: {prog_label: prog_label}}] }
 
     if label == stack.first["deadline_target"]
       if (pg = Page.from_tag_parts("Deadline", id, prog, stack.first["deadline_target"]))
@@ -158,7 +158,8 @@ SQL
       fail "BUG: Prog #{prog}##{label} did not provide flow control"
     end
   ensure
-    Clog.emit("finished strand") { [self, {strand_finished: {duration: Time.now - start_time, prog_label: prog_label}}] }
+    duration = Time.now - start_time
+    Clog.emit("finished strand") { [self, {strand_finished: {duration:, prog_label:}}] } if duration > 1
   end
 
   def run(seconds = 0)

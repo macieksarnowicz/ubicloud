@@ -31,7 +31,7 @@ RSpec.describe Prog::Vnet::NicNexus do
         private_subnet_id: "57afa8a7-2357-4012-9632-07fbe13a3133",
         name: "demonic"
       ).and_return(nic)
-      expect(Strand).to receive(:create).with(prog: "Vnet::NicNexus", label: "wait_setup").and_yield(Strand.new).and_return(Strand.new)
+      expect(Strand).to receive(:create).with(prog: "Vnet::NicNexus", label: "wait_allocation").and_yield(Strand.new).and_return(Strand.new)
       described_class.assemble(ps.id, ipv6_addr: "fd10:9b0b:6b4b:8fbb::/128", name: "demonic")
     end
 
@@ -48,7 +48,7 @@ RSpec.describe Prog::Vnet::NicNexus do
         private_subnet_id: "57afa8a7-2357-4012-9632-07fbe13a3133",
         name: "demonic"
       ).and_return(nic)
-      expect(Strand).to receive(:create).with(prog: "Vnet::NicNexus", label: "wait_setup").and_yield(Strand.new).and_return(Strand.new)
+      expect(Strand).to receive(:create).with(prog: "Vnet::NicNexus", label: "wait_allocation").and_yield(Strand.new).and_return(Strand.new)
       described_class.assemble(ps.id, ipv4_addr: "10.0.0.12/32", name: "demonic")
     end
   end
@@ -66,12 +66,25 @@ RSpec.describe Prog::Vnet::NicNexus do
     end
   end
 
+  describe "#wait_allocation" do
+    it "naps if nothing to do" do
+      expect { nx.wait_allocation }.to nap(5)
+    end
+
+    it "hops to wait_setup if allocated" do
+      expect(nx).to receive(:when_vm_allocated_set?).and_yield
+      expect { nx.wait_allocation }.to hop("wait_setup")
+    end
+  end
+
   describe "#wait_setup" do
     it "naps if nothing to do" do
+      expect(nx).to receive(:decr_vm_allocated)
       expect { nx.wait_setup }.to nap(5)
     end
 
     it "starts rekeying if setup is triggered" do
+      expect(nx).to receive(:decr_vm_allocated)
       expect(nx).to receive(:when_start_rekey_set?).and_yield
       expect(nx).to receive(:decr_setup_nic)
       expect { nx.wait_setup }.to hop("start_rekey")

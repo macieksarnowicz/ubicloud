@@ -40,6 +40,15 @@ class Clover < Roda
   opts[:check_arity] = :warn
 
   Unreloader.require("helpers") {}
+  Unreloader.record_split_class(__FILE__, "helpers")
+
+  # :nocov:
+  default_fixed_locals = if Config.production? || ENV["CLOVER_FREEZE"] == "1"
+    "()"
+  # :nocov:
+  else
+    "(_no_kw: nil)"
+  end
 
   plugin :all_verbs
   plugin :assets, js: "app.js", css: "app.css", css_opts: {style: :compressed, cache: false}, timestamp_paths: true
@@ -53,7 +62,7 @@ class Clover < Roda
   plugin :invalid_request_body, :raise
   plugin :json_parser, wrap: :unless_hash, error_handler: lambda { |r| raise Roda::RodaPlugins::InvalidRequestBody::Error, "invalid JSON uploaded" }
   plugin :public
-  plugin :render, escape: true, layout: "./layouts/app", template_opts: {chain_appends: true, freeze: true, skip_compiled_encoding_detection: true}
+  plugin :render, escape: true, layout: "./layouts/app", template_opts: {chain_appends: true, freeze: true, skip_compiled_encoding_detection: true, scope_class: self, default_fixed_locals:, extract_fixed_locals: true}
   plugin :request_headers
   plugin :typecast_params_sized_integers, sizes: [64], default_size: 64
 
@@ -92,7 +101,7 @@ class Clover < Roda
     csp.style_src :self, "https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css"
     csp.img_src :self, "data: image/svg+xml"
     csp.form_action :self, "https://checkout.stripe.com", "https://github.com/login/oauth/authorize", "https://accounts.google.com/o/oauth2/auth"
-    csp.script_src :self, "https://cdn.jsdelivr.net/npm/jquery@3.7.0/dist/jquery.min.js", "https://cdn.jsdelivr.net/npm/dompurify@3.0.5/dist/purify.min.js", "https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js", "https://challenges.cloudflare.com/turnstile/v0/api.js"
+    csp.script_src :self, "https://cdn.jsdelivr.net/npm/jquery@3.7.0/dist/jquery.min.js", "https://cdn.jsdelivr.net/npm/dompurify@3.0.5/dist/purify.min.js", "https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js", "https://challenges.cloudflare.com/turnstile/v0/api.js", "https://cdn.jsdelivr.net/npm/marked@15.0.5/marked.min.js"
     csp.frame_src :self, "https://challenges.cloudflare.com"
     csp.connect_src :self, "https://*.ubicloud.com"
     csp.base_uri :none
@@ -357,7 +366,7 @@ class Clover < Roda
     # :nocov:
     if Config.omniauth_github_id
       require "omniauth-github"
-      omniauth_provider :github, Config.omniauth_github_id, Config.omniauth_github_secret
+      omniauth_provider :github, Config.omniauth_github_id, Config.omniauth_github_secret, scope: "user:email"
     end
     if Config.omniauth_google_id
       require "omniauth-google-oauth2"
@@ -413,6 +422,7 @@ class Clover < Roda
         redirect login_route
       end
     end
+    reset_password_explanatory_text "If you have forgotten your password, you can request a password reset:"
 
     after_reset_password do
       remove_all_active_sessions_except_current

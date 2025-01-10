@@ -10,8 +10,6 @@ RSpec.describe Clover, "inference-endpoint" do
 
   describe "feature enabled" do
     before do
-      project.set_ff_inference_ui(true)
-      project_wo_permissions.set_ff_inference_ui(true)
       login(user.email)
     end
 
@@ -24,12 +22,19 @@ RSpec.describe Clover, "inference-endpoint" do
     it "shows the right inference endpoints" do
       ps = Prog::Vnet::SubnetNexus.assemble(project.id, name: "dummy-ps-1", location: "hetzner-fsn1").subject
       lb = LoadBalancer.create_with_id(private_subnet_id: ps.id, name: "dummy-lb-1", src_port: 80, dst_port: 80, health_check_endpoint: "/up")
-      InferenceEndpoint.create_with_id(name: "ie1", model_name: "e5-mistral-7b-it", project_id: project_wo_permissions.id, is_public: true, visible: true, location: "loc", vm_size: "size", replica_count: 1, boot_image: "image", storage_volumes: [], engine_params: "", engine: "vllm", private_subnet_id: ps.id, load_balancer_id: lb.id)
-      InferenceEndpoint.create_with_id(name: "ie2", model_name: "e5-mistral-8b-it", project_id: project_wo_permissions.id, is_public: true, visible: false, location: "loc", vm_size: "size", replica_count: 1, boot_image: "image", storage_volumes: [], engine_params: "", engine: "vllm", private_subnet_id: ps.id, load_balancer_id: lb.id)
-      InferenceEndpoint.create_with_id(name: "ie3", model_name: "llama-guard-3-8b", project_id: project_wo_permissions.id, is_public: false, visible: true, location: "loc", vm_size: "size", replica_count: 1, boot_image: "image", storage_volumes: [], engine_params: "", engine: "vllm", private_subnet_id: ps.id, load_balancer_id: lb.id)
-      ie = InferenceEndpoint.create_with_id(name: "ie4", model_name: "llama-3-1-405b-it", project_id: project.id, is_public: false, visible: true, location: "loc", vm_size: "size", replica_count: 1, boot_image: "image", storage_volumes: [], engine_params: "", engine: "vllm", private_subnet_id: ps.id, load_balancer_id: lb.id)
-      ie.associate_with_project(project)
-      InferenceEndpoint.create_with_id(name: "ie5", model_name: "test-model", project_id: project.id, is_public: false, visible: true, location: "loc", vm_size: "size", replica_count: 1, boot_image: "image", storage_volumes: [], engine_params: "", engine: "vllm", private_subnet_id: ps.id, load_balancer_id: lb.id)
+      [
+        ["ie1", "e5-mistral-7b-it", project_wo_permissions, true, true, {capability: "Embeddings"}],
+        ["ie2", "e5-mistral-8b-it", project_wo_permissions, true, false, {capability: "Embeddings"}],
+        ["ie3", "llama-guard-3-8b", project_wo_permissions, false, true, {capability: "Text Generation"}],
+        ["ie4", "llama-3-1-405b-it", project, false, true, {capability: "Text Generation"}],
+        ["ie5", "llama-3-2-3b-it", project, false, true, {capability: "Text Generation"}],
+        ["ie6", "test-model", project_wo_permissions, false, true, {capability: "Text Generation"}],
+        ["ie7", "unknown-capability", project_wo_permissions, true, true, {capability: "wrong capability"}]
+      ].each do |name, model_name, project, is_public, visible, tags|
+        ie = InferenceEndpoint.create_with_id(name:, model_name:, project_id: project.id, is_public:, visible:, load_balancer_id: lb.id, location: "loc", vm_size: "size", replica_count: 1, boot_image: "image", storage_volumes: [], engine_params: "", engine: "vllm", private_subnet_id: ps.id, tags:)
+        ie.associate_with_project(project)
+      end
+
       visit "#{project.path}/inference-endpoint"
 
       expect(page.title).to eq("Ubicloud - Inference Endpoints")
@@ -38,6 +43,7 @@ RSpec.describe Clover, "inference-endpoint" do
       expect(page).to have_no_content("llama-guard-3-8b") # private model of another project
       expect(page).to have_content("llama-3-1-405b-it")
       expect(page).to have_no_content("test-model") # no permissions
+      expect(page).to have_no_content("unknown-capability")
     end
 
     it "does not show inference endpoints without permissions" do
@@ -49,18 +55,6 @@ RSpec.describe Clover, "inference-endpoint" do
 
       expect(page.title).to eq("Ubicloud - Inference Endpoints")
       expect(page).to have_no_content("e5-mistral-7b-it")
-    end
-  end
-
-  describe "feature disabled" do
-    before do
-      project.set_ff_inference_ui(false)
-      login(user.email)
-      visit "#{project.path}/inference-endpoint"
-    end
-
-    it "inference endpoint page is not accessible" do
-      expect(page.status_code).to eq(404)
     end
   end
 

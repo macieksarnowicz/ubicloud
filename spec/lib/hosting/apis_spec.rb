@@ -4,6 +4,7 @@ RSpec.describe Hosting::Apis do
   let(:vm_host) {
     instance_double(
       VmHost,
+      ubid: "vhgkz40v22ny2qkf4maddr8xv1",
       provider: HetznerHost::PROVIDER_NAME,
       hetzner_host: hetzner_host
     )
@@ -32,15 +33,15 @@ RSpec.describe Hosting::Apis do
     end
   end
 
-  describe "reset_server" do
-    it "can reset a server" do
-      expect(hetzner_apis).to receive(:reset).with(123).and_return(true)
-      described_class.reset_server(vm_host)
+  describe "reimage_server" do
+    it "can reimage a server" do
+      expect(hetzner_apis).to receive(:reimage).with(123).and_return(true)
+      described_class.reimage_server(vm_host)
     end
 
     it "raises an error if the provider is unknown" do
       expect(vm_host).to receive(:provider).and_return("unknown").at_least(:once)
-      expect { described_class.reset_server(vm_host) }.to raise_error RuntimeError, "unknown provider unknown"
+      expect { described_class.reimage_server(vm_host) }.to raise_error RuntimeError, "unknown provider unknown"
     end
   end
 
@@ -53,6 +54,18 @@ RSpec.describe Hosting::Apis do
     it "raises an error if the provider is unknown" do
       expect(vm_host).to receive(:provider).and_return("unknown").at_least(:once)
       expect { described_class.pull_data_center(vm_host) }.to raise_error RuntimeError, "unknown provider unknown"
+    end
+  end
+
+  describe "set_server_name" do
+    it "can set server name" do
+      expect(hetzner_apis).to receive(:set_server_name).with(123, "vhgkz40v22ny2qkf4maddr8xv1").and_return(nil)
+      described_class.set_server_name(vm_host)
+    end
+
+    it "raises an error if the provider is unknown" do
+      expect(vm_host).to receive(:provider).and_return("unknown").at_least(:once)
+      expect { described_class.set_server_name(vm_host) }.to raise_error RuntimeError, "unknown provider unknown"
     end
   end
 end

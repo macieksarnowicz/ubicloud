@@ -49,12 +49,12 @@ $(".delete-btn").on("click", function (event) {
   let redirect = $(this).data("redirect");
   let method = $(this).data("method");
 
-  if (!confirm(confirmationMessage || "Are you sure to delete?")) {
-    return;
-  }
-
-  if (confirmation && prompt(`Please type "${confirmation}" to confirm deletion`, "") != confirmation) {
-    alert("Could not confirm resource name");
+  if (confirmation) {
+    if (prompt(`Please type "${confirmation}" to confirm deletion`, "") != confirmation) {
+      alert("Could not confirm resource name");
+      return;
+    }
+  } else if (!confirm(confirmationMessage || "Are you sure to delete?")) {
     return;
   }
 
@@ -290,6 +290,19 @@ function setupPlayground() {
     return;
   }
 
+  function show_tab(name) {
+    $(".inference-tab").removeClass("active");
+    $(".inference-response").hide();
+    $(`#inference_tab_${name}`).show().parent().addClass("active");
+    $(`#inference_response_${name}`).show().removeClass("max-h-96");
+  }
+
+  $(".inference-tab").on("click", function (event) {
+    show_tab($(this).data("target"));
+  });
+
+  $('#inference_tab_preview').hide();
+
   let controller = null;
 
   const generate = async () => {
@@ -317,8 +330,12 @@ function setupPlayground() {
       return;
     }
 
-    $('#inference_response').text("");
+    $('#inference_response_raw').text("");
+    $('#inference_response_preview').text("");
     $('#inference_submit').text("Stop");
+    show_tab("raw");
+    $('#inference_tab_preview').hide();
+    $('#inference_response_raw').addClass("max-h-96");
 
     controller = new AbortController();
     const signal = controller.signal;
@@ -333,7 +350,6 @@ function setupPlayground() {
         body: JSON.stringify({
           model: $('#inference_endpoint option:selected').text().trim(),
           messages: [{ role: "user", content: prompt }],
-          max_tokens: 1000,
           stream: true,
         }),
         signal,
@@ -359,10 +375,13 @@ function setupPlayground() {
         parsedLines.forEach((parsedLine) => {
           const content = parsedLine?.choices?.[0]?.delta?.content;
           if (content) {
-            $('#inference_response').append(content);
+            $('#inference_response_raw').text($('#inference_response_raw').text() + content);
           }
         });
       }
+      const parsed_response = DOMPurify.sanitize(marked.parse($('#inference_response_raw').text()));
+      $('#inference_response_preview').html(parsed_response);
+      show_tab("preview");
     }
     catch (error) {
       let errorMessage;
@@ -375,7 +394,7 @@ function setupPlayground() {
         errorMessage = `An error occurred: ${error.message}`;
       }
 
-      $('#inference_response').text(errorMessage);
+      $('#inference_response_raw').text(errorMessage);
     } finally {
       $('#inference_submit').text("Submit");
       controller = null;

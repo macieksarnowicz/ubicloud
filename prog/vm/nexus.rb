@@ -210,6 +210,7 @@ class Prog::Vm::Nexus < Prog::Base
       nap 30
     end
 
+    vm.nics.each(&:incr_vm_allocated)
     decr_waiting_for_capacity
     if (page = Page.from_tag_parts("NoCapacity", vm.location, vm.arch, vm.family)) && page.created_at < Time.now - 15 * 60 && queued_vms.count <= 1
       page.incr_resolve
@@ -308,13 +309,12 @@ class Prog::Vm::Nexus < Prog::Base
     project = vm.projects.first
     hop_wait unless project.billable
 
-    billing_record_parts = vm.billing_record_parts
     BillingRecord.create_with_id(
       project_id: project.id,
       resource_id: vm.id,
       resource_name: vm.name,
-      billing_rate_id: BillingRate.from_resource_properties(billing_record_parts[:resource_type], vm.family, vm.location)["id"],
-      amount: billing_record_parts[:amount]
+      billing_rate_id: BillingRate.from_resource_properties("VmVCpu", vm.family, vm.location)["id"],
+      amount: vm.vcpus
     )
 
     vm.storage_volumes.each do |vol|
@@ -361,6 +361,10 @@ class Prog::Vm::Nexus < Prog::Base
       hop_restart
     end
 
+    when_stop_set? do
+      hop_stopped
+    end
+
     when_checkup_set? do
       hop_unavailable if !available?
       decr_checkup
@@ -393,6 +397,15 @@ class Prog::Vm::Nexus < Prog::Base
     decr_restart
     host.sshable.cmd("sudo systemctl restart #{vm.inhost_name}")
     hop_wait
+  end
+
+  label def stopped
+    when_stop_set? do
+      host.sshable.cmd("sudo systemctl stop #{vm.inhost_name}")
+    end
+    decr_stop
+
+    nap 60 * 60
   end
 
   label def unavailable
@@ -482,13 +495,14 @@ class Prog::Vm::Nexus < Prog::Base
   end
 
   label def wait_lb_expiry
-    unless vm.lb_expiry_started_set?
-      vm.incr_lb_expiry_started
-      vm.load_balancer.evacuate_vm(vm)
-      nap 30
+    if (lb = vm.load_balancer)
+      unless vm.lb_expiry_started_set?
+        vm.incr_lb_expiry_started
+        lb.evacuate_vm(vm)
+        nap 30
+      end
+      lb.remove_vm(vm)
     end
-
-    vm.load_balancer.remove_vm(vm) if vm.load_balancer
 
     vm.vm_host.sshable.cmd("sudo host/bin/setup-vm delete_net #{q_vm}")
 

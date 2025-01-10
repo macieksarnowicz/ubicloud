@@ -20,8 +20,8 @@ class Clover
     else 0
     end
 
-    requested_postgres_core_count = (requested_standby_count + 1) * parsed_size.vcpu / 2
-    Validation.validate_core_quota(@project, "PostgresCores", requested_postgres_core_count)
+    requested_postgres_vcpu_count = (requested_standby_count + 1) * parsed_size.vcpu
+    Validation.validate_vcpu_quota(@project, "PostgresVCpu", requested_postgres_vcpu_count)
 
     st = Prog::Postgres::PostgresResourceNexus.assemble(
       project_id: @project.id,
@@ -88,10 +88,10 @@ class Clover
     options.add_option(name: "location", values: Option.postgres_locations.map(&:display_name), parent: "flavor")
     options.add_option(name: "size", values: [2, 4, 8, 16, 30, 60].map { "standard-#{_1}" }, parent: "location")
 
-    options.add_option(name: "storage_size", values: ["128", "256", "512", "1024", "2048", "4096"], parent: "size") do |flavor, location, size, storage_size|
+    options.add_option(name: "storage_size", values: ["64", "128", "256", "512", "1024", "2048", "4096"], parent: "size") do |flavor, location, size, storage_size|
       size = size.split("-").last.to_i
-      lower_limit = [size * 64, 1024].min
-      upper_limit = size * ((location == "eu-central-h1") ? 256 : 128)
+      lower_limit = [size * 32, 1024].min
+      upper_limit = (2**Math.log2(size).ceil) * ((location == "eu-central-h1") ? 128 : 64)
       storage_size.to_i >= lower_limit && storage_size.to_i <= upper_limit
     end
 

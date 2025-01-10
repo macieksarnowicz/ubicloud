@@ -204,11 +204,10 @@ RSpec.describe Validation do
     describe "#validate_postgres_storage_size" do
       it "valid postgres storage sizes" do
         [
-          ["hetzner-fsn1", "standard-2", "128"],
+          ["hetzner-fsn1", "standard-2", "64"],
           ["hetzner-fsn1", "standard-2", "256"],
-          ["hetzner-fsn1", "standard-4", "1024"],
-          ["hetzner-fsn1", "standard-4", "1024"],
-          ["leaseweb-wdc02", "standard-4", "512"]
+          ["hetzner-fsn1", "standard-4", "512"],
+          ["leaseweb-wdc02", "standard-4", "256"]
         ].each do |location, pg_size, storage_size|
           expect(described_class.validate_postgres_storage_size(location, pg_size, storage_size)).to eq(storage_size.to_f)
         end
@@ -437,15 +436,15 @@ RSpec.describe Validation do
     end
   end
 
-  describe "#validate_core_quota" do
-    it "sufficient core quota" do
+  describe "#validate_vcpu_quota" do
+    it "sufficient cpu quota" do
       p = instance_double(Project, current_resource_usage: 5, effective_quota_value: 10, quota_available?: true)
-      expect { described_class.validate_core_quota(p, "VmCores", 1) }.not_to raise_error
+      expect { described_class.validate_vcpu_quota(p, "VmVCpu", 2) }.not_to raise_error
     end
 
-    it "insufficient core quota" do
+    it "insufficient cpu quota" do
       p = instance_double(Project, current_resource_usage: 10, effective_quota_value: 10, quota_available?: false)
-      expect { described_class.validate_core_quota(p, "VmCores", 1) }.to raise_error described_class::ValidationFailed
+      expect { described_class.validate_vcpu_quota(p, "VmVCpu", 2) }.to raise_error described_class::ValidationFailed
     end
   end
 

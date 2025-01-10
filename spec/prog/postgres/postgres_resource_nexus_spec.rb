@@ -21,7 +21,8 @@ RSpec.describe Prog::Postgres::PostgresResourceNexus do
         PostgresServer,
         vm: instance_double(
           Vm,
-          cores: 1,
+          vcpus: 2,
+          family: "standard",
           vm_host: instance_double(VmHost, id: "dd9ef3e7-6d55-8371-947f-a8478b42a17d"),
           private_subnets: [instance_double(PrivateSubnet, id: "627a23ee-c1fb-86d9-a261-21cc48415916")]
         )
@@ -30,7 +31,8 @@ RSpec.describe Prog::Postgres::PostgresResourceNexus do
         PostgresServer,
         vm: instance_double(
           Vm,
-          cores: 1,
+          vcpus: 2,
+          family: "standard",
           private_subnets: [instance_double(PrivateSubnet, id: "627a23ee-c1fb-86d9-a261-21cc48415916")]
         )
       ),
@@ -40,7 +42,6 @@ RSpec.describe Prog::Postgres::PostgresResourceNexus do
 
   before do
     allow(nx).to receive(:postgres_resource).and_return(postgres_resource)
-    allow(postgres_resource.representative_server.vm).to receive(:billing_record_parts).and_return({resource_type: "VmCores", amount: 1})
   end
 
   describe ".assemble" do
@@ -275,16 +276,16 @@ RSpec.describe Prog::Postgres::PostgresResourceNexus do
         project_id: postgres_resource.project_id,
         resource_id: postgres_resource.id,
         resource_name: postgres_resource.name,
-        billing_rate_id: BillingRate.from_resource_properties("PostgresCores", "standard", postgres_resource.location)["id"],
-        amount: postgres_resource.representative_server.vm.cores
+        billing_rate_id: BillingRate.from_resource_properties("PostgresVCpu", "standard-standard", postgres_resource.location)["id"],
+        amount: postgres_resource.representative_server.vm.vcpus
       )
 
       expect(BillingRecord).to receive(:create_with_id).with(
         project_id: postgres_resource.project_id,
         resource_id: postgres_resource.id,
         resource_name: postgres_resource.name,
-        billing_rate_id: BillingRate.from_resource_properties("PostgresStandbyCores", "standard", postgres_resource.location)["id"],
-        amount: postgres_resource.representative_server.vm.cores
+        billing_rate_id: BillingRate.from_resource_properties("PostgresStandbyVCpu", "standard-standard", postgres_resource.location)["id"],
+        amount: postgres_resource.representative_server.vm.vcpus
       )
 
       expect(BillingRecord).to receive(:create_with_id).with(

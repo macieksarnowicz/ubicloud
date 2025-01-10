@@ -26,7 +26,7 @@ RSpec.describe Clover, "github" do
 
     visit "#{project.path}/github"
     expect(page.status_code).to eq(501)
-    expect(page).to have_content "GitHub Action Runner integration is not enabled. Set GITHUB_APP_NAME to enable it."
+    expect(page.body).to eq "GitHub Action Runner integration is not enabled. Set GITHUB_APP_NAME to enable it."
   end
 
   it "raises forbidden when does not have permissions" do
@@ -56,7 +56,7 @@ RSpec.describe Clover, "github" do
 
       expect(page.status_code).to eq(200)
       expect(page.title).to eq("Ubicloud - GitHub Runner Settings")
-      expect(page).to have_content "Project doesn't have valid billing information"
+      expect(page).to have_flash_error("Project doesn't have valid billing information")
     end
 
     it "shows new billing info button instead of connect account if project has no valid payment method" do
@@ -194,7 +194,7 @@ RSpec.describe Clover, "github" do
       expect(page.status_code).to eq(204)
 
       visit "#{project.path}/github/cache"
-      expect(page).to have_content "Cache '#{entry.key}' deleted"
+      expect(page).to have_flash_notice("Cache '#{entry.key}' deleted.")
     end
 
     it "raises not found when cache entry not exists" do

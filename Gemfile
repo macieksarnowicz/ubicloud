@@ -10,17 +10,17 @@ gem "bcrypt_pbkdf"
 gem "ed25519"
 gem "net-ssh"
 gem "netaddr"
-gem "tilt", ">= 2.2"
+gem "tilt", github: "jeremyevans/tilt", ref: "865c729c5bf2bb19cdd6a35193c5478addfe85b2"
 gem "erubi", ">= 1.5"
 gem "puma", ">= 6.2.2"
-gem "roda", ">= 3.87"
-gem "rodauth", github: "jeremyevans/rodauth", ref: "c6e0700002e6967e545964ca1eb5ecc8c59ea05c"
+gem "roda", github: "jeremyevans/roda", ref: "430177d850bb013b3bba9df0a65f45744779fd2a"
+gem "rodauth", github: "jeremyevans/rodauth", ref: "b32a4e32c0315d17f9bc457ba0469f6356d79765"
 gem "rotp"
 gem "rqrcode"
 gem "mail"
 gem "shellwords"
 gem "refrigerator", ">= 1"
-gem "sequel", github: "jeremyevans/sequel", ref: "eba1a8e029d6bc1f1ee17ec1e48d501eb289c7d9"
+gem "sequel", ">= 5.88"
 gem "sequel_pg", ">= 1.8", require: "sequel"
 gem "rack-unreloader", ">= 1.8"
 gem "rake"
@@ -33,7 +33,7 @@ gem "stripe"
 gem "countries"
 gem "octokit"
 gem "argon2-kdf"
-gem "rodauth-omniauth", ">= 0.6.0"
+gem "rodauth-omniauth", github: "janko/rodauth-omniauth", ref: "477810179ba0cab8d459be1a0d87dca5b57ec94b"
 gem "omniauth-github", "~> 2.0"
 gem "omniauth-google-oauth2", "~> 1.2"
 
@@ -63,6 +63,7 @@ end
 
 group :test do
   gem "capybara"
+  gem "capybara-validate_html5", ">= 2"
   gem "rspec"
   gem "webmock"
   gem "pdf-reader"
@@ -77,7 +78,7 @@ end
 
 gem "webauthn", "~> 3.2"
 
-gem "aws-sdk-s3", "~> 1.175"
+gem "aws-sdk-s3", "~> 1.177"
 
 gem "acme-client", "~> 2.0"
 

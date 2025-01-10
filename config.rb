@@ -79,6 +79,7 @@ module Config
   override :puma_min_threads, 1, int
   override :puma_workers, 3, int
   override :raise_errors, false, bool
+  override :recursive_tag_limit, 32, int
   override :root, File.expand_path(__dir__), string
   override :timeout, 10, int
   override :versioning, false, bool
@@ -160,7 +161,7 @@ module Config
   override :postgres16_paradedb_ubuntu_2204_version, "20241025.1.0", string
   override :postgres17_paradedb_ubuntu_2204_version, "20241025.1.0", string
   override :postgres16_lantern_ubuntu_2204_version, "20241024.1.0", string
-  override :ai_ubuntu_2404_nvidia_version, "20241211.1.0", string
+  override :ai_ubuntu_2404_nvidia_version, "20250108.1.0", string
 
   # Allocator
   override :allocator_target_host_utilization, 0.55, float

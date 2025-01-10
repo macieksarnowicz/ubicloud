@@ -16,7 +16,7 @@ class Prog::Vnet::NicNexus < Prog::Base
 
     DB.transaction do
       nic = Nic.create(private_ipv6: ipv6_addr, private_ipv4: ipv4_addr, mac: gen_mac, name: name, private_subnet_id: private_subnet_id) { _1.id = ubid.to_uuid }
-      Strand.create(prog: "Vnet::NicNexus", label: "wait_setup") { _1.id = nic.id }
+      Strand.create(prog: "Vnet::NicNexus", label: "wait_allocation") { _1.id = nic.id }
     end
   end
 
@@ -26,7 +26,15 @@ class Prog::Vnet::NicNexus < Prog::Base
     end
   end
 
+  label def wait_allocation
+    when_vm_allocated_set? do
+      hop_wait_setup
+    end
+    nap 5
+  end
+
   label def wait_setup
+    decr_vm_allocated
     when_start_rekey_set? do
       decr_setup_nic
       hop_start_rekey
