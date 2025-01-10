@@ -4,6 +4,8 @@ class VmHostCpu < Sequel::Model
   many_to_one :vm_host
 end
 
+VmHostCpu.unrestrict_primary_key
+
 # Table: vm_host_cpu
 # Primary Key: (vm_host_id, cpu_number)
 # Columns:

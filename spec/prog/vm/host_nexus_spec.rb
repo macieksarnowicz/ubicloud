@@ -139,7 +139,7 @@ RSpec.describe Prog::Vm::HostNexus do
       ])
 
       (0..4).each do |i|
-        expect(VmHostCpu).to receive(:create).with(spdk: i < 2)
+        expect(VmHostCpu).to receive(:create).with(vm_host_id: vm_host.id, cpu_number: i, spdk: i < 2)
       end
 
       expect { nx.wait_prep }.to hop("setup_hugepages")
