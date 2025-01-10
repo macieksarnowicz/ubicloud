@@ -19,7 +19,6 @@ class Prog::Vm::VmHostSliceNexus < Prog::Base
         name: name,
         type: type,
         family: family,
-        allowed_cpus: 0,
         cores: 0,
         total_cpu_percent: 0,
         used_cpu_percent: 0,
@@ -28,8 +27,7 @@ class Prog::Vm::VmHostSliceNexus < Prog::Base
         vm_host_id: vm_host.id
       ) { _1.id = ubid.to_uuid }
 
-      # This validates the cpuset and updates or related values
-      vm_host_slice.from_cpu_bitmask(VmHostSlice.cpuset_to_bitmask(allowed_cpus))
+      vm_host_slice.set_allowed_cpus(allowed_cpus)
 
       Strand.create(prog: "Vm::VmHostSliceNexus", label: "prep") { _1.id = vm_host_slice.id }
     end
@@ -54,7 +52,7 @@ class Prog::Vm::VmHostSliceNexus < Prog::Base
       vm_host_slice.update(enabled: true)
       hop_wait
     when "NotStarted", "Failed"
-      host.sshable.cmd("common/bin/daemonizer 'sudo host/bin/setup-slice prep #{vm_host_slice.inhost_name} \"#{vm_host_slice.allowed_cpus}\"' prep_#{vm_host_slice.name}")
+      host.sshable.cmd("common/bin/daemonizer 'sudo host/bin/setup-slice prep #{vm_host_slice.inhost_name} \"#{vm_host_slice.allowed_cpus_cgroup}\"' prep_#{vm_host_slice.name}")
     end
 
     nap 1
@@ -128,7 +126,7 @@ class Prog::Vm::VmHostSliceNexus < Prog::Base
 
   def available?
     host.sshable.cmd("systemctl is-active #{vm_host_slice.inhost_name}").split("\n").all?("active") &&
-      (host.sshable.cmd("cat /sys/fs/cgroup/#{vm_host_slice.inhost_name}/cpuset.cpus.effective").chomp == vm_host_slice.allowed_cpus) &&
+      (host.sshable.cmd("cat /sys/fs/cgroup/#{vm_host_slice.inhost_name}/cpuset.cpus.effective").chomp == vm_host_slice.allowed_cpus_cgroup) &&
       (host.sshable.cmd("cat /sys/fs/cgroup/#{vm_host_slice.inhost_name}/cpuset.cpus.partition").chomp == "root")
   end
 end
