@@ -143,7 +143,6 @@ end
 #  name              | text                     | NOT NULL
 #  enabled           | boolean                  | NOT NULL DEFAULT false
 #  type              | vm_host_slice_type       | NOT NULL DEFAULT 'dedicated'::vm_host_slice_type
-#  allowed_cpus      | text                     | NOT NULL
 #  cores             | integer                  | NOT NULL
 #  total_cpu_percent | integer                  | NOT NULL
 #  used_cpu_percent  | integer                  | NOT NULL
@@ -163,4 +162,5 @@ end
 # Foreign key constraints:
 #  vm_host_slice_vm_host_id_fkey | (vm_host_id) REFERENCES vm_host(id)
 # Referenced By:
-#  vm | vm_vm_host_slice_id_fkey | (vm_host_slice_id) REFERENCES vm_host_slice(id)
+#  vm          | vm_vm_host_slice_id_fkey          | (vm_host_slice_id) REFERENCES vm_host_slice(id)
+#  vm_host_cpu | vm_host_cpu_vm_host_slice_id_fkey | (vm_host_slice_id) REFERENCES vm_host_slice(id)

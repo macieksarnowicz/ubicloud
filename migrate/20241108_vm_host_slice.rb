@@ -9,7 +9,6 @@ Sequel.migration do
       column :name, :text, null: false
       column :enabled, :bool, null: false, default: false
       column :type, :vm_host_slice_type, default: "dedicated", null: false
-      column :allowed_cpus, :text, null: false
       column :cores, Integer, null: false
       column :total_cpu_percent, Integer, null: false
       column :used_cpu_percent, Integer, null: false
