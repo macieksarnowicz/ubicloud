@@ -18,7 +18,7 @@ RSpec.describe Prog::Vm::HostNexus do
 
   let(:vms) { [instance_double(Vm, memory_gib: 1), instance_double(Vm, memory_gib: 2)] }
   let(:vm_host_slices) { [instance_double(VmHostSlice, name: "standard1"), instance_double(VmHostSlice, name: "standard2")] }
-  let(:vm_host) { instance_double(VmHost, vms: vms, vm_host_slices: vm_host_slices) }
+  let(:vm_host) { instance_double(VmHost, vms: vms, vm_host_slices: vm_host_slices, id: "1d422893-2955-4c2c-b41c-f2ec70bcd60d", spdk_cpu_count: 2) }
   let(:sshable) { instance_double(Sshable) }
 
   before do
@@ -137,6 +137,10 @@ RSpec.describe Prog::Vm::HostNexus do
         instance_double(Strand, prog: "LearnCpu", exitval: {"arch" => "arm64", "total_sockets" => 2, "total_dies" => 3, "total_cores" => 4, "total_cpus" => 5}),
         instance_double(Strand, prog: "ArbitraryOtherProg")
       ])
+
+      (0..4).each do |i|
+        expect(VmHostCpu).to receive(:create).with(spdk: i < 2)
+      end
 
       expect { nx.wait_prep }.to hop("setup_hugepages")
     end
