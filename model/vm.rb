@@ -114,7 +114,13 @@ class Vm < Sequel::Model
     total_packages = vm_host.total_sockets
 
     # Computed all-system statistics, now scale it down to meet VM needs.
-    cores_from_cpus = Rational(vcpus) / threads_per_core
+    if vcpus == 1 && threads_per_core > 1
+      # special case for single-threaded VMs
+      cores_from_cpus = Rational(vcpus)
+      threads_per_core = 1
+    else
+      cores_from_cpus = Rational(vcpus) / threads_per_core
+    end
     proportion = cores_from_cpus / vm_host.total_cores
     packages = (total_packages * proportion).ceil
     dies_per_package = (total_dies_per_package * proportion).ceil
@@ -144,7 +150,7 @@ class Vm < Sequel::Model
       _1.family == family &&
         _1.arch == arch &&
         _1.vcpus == vcpus &&
-        _1.vcpu_percent_limit == cpu_percent_limit
+        _1.cpu_percent_limit == cpu_percent_limit
     }
     vm_size.name
   end
