@@ -320,7 +320,6 @@ module Scheduling::Allocator
   # one checks if the candidate_host can host a slice or has one already.
   # The second one creates a slice if needed, once the host candidate is selected.
   class VmHostSliceAllocation
-    attr_reader :is_valid
     def initialize(candidate_host, request, vm_host_allocations)
       @candidate_host = candidate_host
       @request = request

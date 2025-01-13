@@ -1023,6 +1023,15 @@ RSpec.describe Al do
 
       expect(req.memory_gib_for_cores).to eq 3
     end
+
+    it "select_cpuset fails if not enough cpus" do
+      vm = create_vm_with_project
+      req = create_req(vm, vol)
+      al = Scheduling::Allocator::VmHostSliceAllocation.new(nil, req, nil)
+
+      vh = VmHost.first
+      expect { al.select_cpuset(vh.id, 24) }.to raise_error "failed to allocate cpus"
+    end
   end
 
   describe "#allocate_spdk_installation" do

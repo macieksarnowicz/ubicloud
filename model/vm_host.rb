@@ -293,17 +293,6 @@ class VmHost < Sequel::Model
     update(used_cores: spdk_cores)
   end
 
-  def allocate_host_cpuset(spdk_cpus)
-    cpuset = 0
-    (0..spdk_cpus - 1).each { |i| cpuset |= (1 << i) }
-
-    VmHostSlice.bitmask_to_cpuset(cpuset)
-  end
-
-  def cpuset
-    @cpuset ||= allocate_host_cpuset(spdk_installations.first.cpu_count)
-  end
-
   def render_arch(arm64:, x64:)
     case arch
     when "arm64"
