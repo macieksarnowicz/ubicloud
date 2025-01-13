@@ -18,11 +18,13 @@ RSpec.describe Prog::Vm::HostNexus do
 
   let(:vms) { [instance_double(Vm, memory_gib: 1), instance_double(Vm, memory_gib: 2)] }
   let(:vm_host_slices) { [instance_double(VmHostSlice, name: "standard1"), instance_double(VmHostSlice, name: "standard2")] }
-  let(:vm_host) { instance_double(VmHost, vms: vms, vm_host_slices: vm_host_slices, id: "1d422893-2955-4c2c-b41c-f2ec70bcd60d", spdk_cpu_count: 2) }
-  let(:sshable) { instance_double(Sshable) }
+  let(:sshable) { Sshable.create_with_id }
+  let(:vm_host) { VmHost.create(location: "x", total_cpus: 48) { _1.id = sshable.id } }
 
   before do
     allow(nx).to receive_messages(vm_host: vm_host, sshable: sshable)
+    allow(vm_host).to receive(:vms).and_return(vms)
+    allow(vm_host).to receive(:vm_host_slices).and_return(vm_host_slices)
   end
 
   describe ".assemble" do
@@ -138,11 +140,8 @@ RSpec.describe Prog::Vm::HostNexus do
         instance_double(Strand, prog: "ArbitraryOtherProg")
       ])
 
-      (0..4).each do |i|
-        expect(VmHostCpu).to receive(:create).with(vm_host_id: vm_host.id, cpu_number: i, spdk: i < 2)
-      end
-
       expect { nx.wait_prep }.to hop("setup_hugepages")
+      expect(vm_host.vm_host_cpus.sort_by(&:cpu_number).map(&:spdk)).to eq([true, true, false, false, false])
     end
 
     it "crashes if an expected field is not set for LearnMemory" do
