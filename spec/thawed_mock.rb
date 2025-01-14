@@ -99,7 +99,7 @@ module ThawedMock
   allow_mocking(BillingRate, :from_resource_properties)
   allow_mocking(Clog, :emit)
   allow_mocking(CloudflareClient, :new)
-  allow_mocking(Hosting::Apis, :pull_data_center, :pull_ips, :reimage_server, :set_server_name)
+  allow_mocking(Hosting::Apis, :pull_data_center, :pull_ips, :reimage_server, :hardware_reset_server, :set_server_name)
   allow_mocking(Minio::Client, :new)
   allow_mocking(Minio::Crypto, :new)
   allow_mocking(Scheduling::Allocator, :allocate)
@@ -110,4 +110,5 @@ module ThawedMock
   allow_mocking(SshKey, :generate)
   allow_mocking(ThreadPrinter, :puts, :run)
   allow_mocking(Util, :create_certificate, :create_root_certificate, :rootish_ssh, :send_email)
+  allow_mocking(UBID, :class_match?)
 end

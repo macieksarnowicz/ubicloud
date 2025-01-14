@@ -516,12 +516,13 @@ class Prog::Vm::Nexus < Prog::Base
     final_clean_up
 
     # Trigger the slice deletion if this is a
-    # dedicated slice for this VM
+    # dedicated slice for this VM or if this is
+    # a shared slice and there are no other VMs.
     # We do not need to wait for this to complete
     unless slice.nil?
       slice.reload
       if slice.enabled &&
-          (slice.type == "dedicated" || (slice.type == "shared" && slice.vms.count == 0))
+          (!slice.is_shared || (slice.is_shared && slice.vms.count == 0))
         slice.incr_destroy
       end
     end

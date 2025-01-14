@@ -13,12 +13,11 @@ unless (slice_name = ARGV.shift)
   exit 1
 end
 
-slice_setup = VmHostSliceSetup.new(slice_name)
+slice_setup = SliceSetup.new(slice_name)
 
 case action
 when "delete"
   slice_setup.purge
-  exit 0
 
 when "prep"
   unless (allowed_cpus = ARGV.shift)

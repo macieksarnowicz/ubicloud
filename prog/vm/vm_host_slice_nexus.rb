@@ -5,7 +5,7 @@ class Prog::Vm::VmHostSliceNexus < Prog::Base
 
   semaphore :destroy, :start_after_host_reboot, :checkup
 
-  def self.assemble_with_host(name, vm_host, family:, allowed_cpus:, memory_gib:, type: "dedicated")
+  def self.assemble_with_host(name, vm_host, family:, allowed_cpus:, memory_gib:, is_shared: false)
     fail "Must provide a VmHost." if vm_host.nil?
     fail "Must provide slice name." if name.nil? || name.empty?
     fail "Must provide family name." if family.nil? || family.empty?
@@ -17,7 +17,7 @@ class Prog::Vm::VmHostSliceNexus < Prog::Base
     DB.transaction do
       vm_host_slice = VmHostSlice.create(
         name: name,
-        type: type,
+        is_shared: is_shared,
         family: family,
         cores: 0,
         total_cpu_percent: 0,

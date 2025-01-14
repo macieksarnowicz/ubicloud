@@ -23,7 +23,8 @@ RSpec.describe Prog::Vm::VmHostSliceNexus do
     VmHostSlice.create_with_id(
       vm_host_id: vm_host.id,
       name: "standard",
-      type: "dedicated",
+      family: "standard",
+      is_shared: false,
       cores: 1,
       total_cpu_percent: 200,
       used_cpu_percent: 0,
@@ -96,7 +97,7 @@ RSpec.describe Prog::Vm::VmHostSliceNexus do
       expect(rg.total_memory_gib).to eq(4)
       expect(rg.used_memory_gib).to eq(0)
       expect(rg.enabled).to be(false)
-      expect(rg.type).to eq("dedicated")
+      expect(rg.is_shared).to be(false)
       expect(rg.id).to eq(st_rg.id)
       expect(rg.ubid).to eq(st_rg.ubid)
       expect(rg.ubid[..1] == "vs").to be true

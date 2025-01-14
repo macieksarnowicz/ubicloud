@@ -79,18 +79,37 @@
           <% end %>
         </ul>
       </li>
-      <% if @project_data && has_project_permission(["Project:user", "Project:billing", "Project:view"]) %>
+      <% if @project_data && has_project_permission(["Project:user", "Project:billing", "Project:view", "Project:viewaccess", "Project:token"]) %>
         <li>
           <div class="text-xs font-semibold leading-6 text-orange-200">Project Details</div>
           <ul role="list" class="-mx-2 mt-2 space-y-1">
+            <%== if has_project_permission("Project:user")
+                   users_url = "#{@project_data[:path]}/user"
+                   users_label = "Users"
+                 elsif has_project_permission("Project:viewaccess")
+                   users_url = "#{@project_data[:path]}/user/access-control"
+                   users_label = "Access Control"
+                 end
+
+                if users_url
+                  render(
+                    "layouts/sidebar/item",
+                    locals: {
+                      name: users_label,
+                      url: users_url,
+                      is_active: request.path.start_with?("#{@project_data[:path]}/user"),
+                      icon: "hero-users",
+                    }
+                  )
+                end %>
             <%== render(
               "layouts/sidebar/item",
               locals: {
-                name: "Users",
-                url: "#{@project_data[:path]}/user",
-                is_active: request.path.start_with?("#{@project_data[:path]}/user"),
-                icon: "hero-users",
-                has_permission: has_project_permission("Project:user")
+                name: "Tokens",
+                url: "#{@project_data[:path]}/token",
+                is_active: request.path.start_with?("#{@project_data[:path]}/token"),
+                icon: "hero-key",
+                has_permission: has_project_permission("Project:token")
               }
             ) %>
             <% if Config.stripe_secret_key %>

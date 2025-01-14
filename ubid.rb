@@ -37,7 +37,7 @@ class UBID
   TYPE_STORAGE_KEY_ENCRYPTION_KEY = "ke"
   TYPE_PROJECT = "pj"
   TYPE_ACCESS_TAG = "tg"
-  TYPE_ACCESS_POLICY = "pc"
+  # TYPE_ACCESS_POLICY = "pc"
   TYPE_ACCOUNT = "ac"
   TYPE_IPSEC_TUNNEL = "tn"
   TYPE_PRIVATE_SUBNET = "ps"
@@ -78,6 +78,7 @@ class UBID
   TYPE_SUBJECT_TAG = "ts"
   TYPE_ACTION_TAG = "ta"
   TYPE_OBJECT_TAG = "t0"
+  TYPE_OBJECT_METATAG = "t2"
   TYPE_VM_HOST_SLICE = "vs"
 
   # Common entropy-based type for everything else
@@ -105,7 +106,7 @@ class UBID
     from_parts(current_milliseconds, type, random_value & 0b11, random_value >> 2)
   end
 
-  # InferenceToken does not have a type, and using et (TYPE_ETC) seems like a bad idea
+  # InferenceApiKey does not have a type, and using et (TYPE_ETC) seems like a bad idea
   ACTION_TYPE_PREFIX_MAP = <<~TYPES.split("\n").map! { _1.split(": ") }.to_h.freeze
     Project: pj
     Vm: vm
@@ -113,7 +114,7 @@ class UBID
     Firewall: fw
     LoadBalancer: 1b
     InferenceEndpoint: 1e
-    InferenceToken: 1t
+    InferenceApiKey: 1t
     Postgres: pg
     SubjectTag: ts
     ActionTag: ta

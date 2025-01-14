@@ -1,0 +1,47 @@
+<% @page_title = "Inference API Keys" %>
+<%== render("inference/tabbar") %>
+
+<div>
+  <%== render(
+    "components/table_card",
+    locals: {
+      headers: ["ID", "API Key", ""],
+      empty_state: "No inference API keys",
+      rows:
+        @inference_api_keys.map do |token|
+          [
+            [
+              token[:id],
+              [token[:key], { revealable: true, copyable: true }],
+              (
+                if has_project_permission("InferenceApiKey:delete")
+                  [
+                    "delete_button",
+                    {
+                      component: {
+                        text: "Delete",
+                        url: "#{@project_data[:path]}/inference-api-key/#{token[:id]}",
+                        confirmation: "delete api key"
+                      }
+                    }
+                  ]
+                else
+                  "No Permission to delete"
+                end
+              )
+            ],
+            { id: "api-key-#{token[:id]}" }
+          ]
+        end
+    }
+  ) %>
+
+  <% if has_project_permission("InferenceApiKey:create") && @inference_api_keys.size < 10 %>
+  <div class="flex justify-end space-y-1 mt-6">
+    <form id="create-inference-api-key" action="<%= "#{@project_data[:path]}/inference-api-key" %>" role="form" method="POST">
+      <%== csrf_tag("#{@project_data[:path]}/inference-api-key") %>
+      <%== render("components/form/submit_button", locals: { text: "Create API Key" }) %>
+    </form>
+  </div>
+  <% end %>
+</div>

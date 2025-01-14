@@ -896,17 +896,17 @@ RSpec.describe Prog::Vm::Nexus do
       expect { nx.destroy }.to hop("destroy_slice")
     end
 
-    it "destroys slice when noslice" do
+    it "#destroy_slice when no slice" do
       expect(vm).to receive(:destroy).and_return(true)
       expect { nx.destroy_slice }.to exit({"msg" => "vm deleted"})
     end
 
-    it "destroys slice with a slice" do
+    it "#destroy_slice with a slice" do
       vm_host_slice = instance_double(VmHostSlice)
       expect(vm).to receive(:vm_host_slice).and_return(vm_host_slice)
       expect(vm_host_slice).to receive(:reload)
       expect(vm_host_slice).to receive(:enabled).and_return(true)
-      expect(vm_host_slice).to receive(:type).and_return("dedicated")
+      expect(vm_host_slice).to receive(:is_shared).and_return(false)
       expect(vm_host_slice).to receive(:incr_destroy)
 
       expect(vm).to receive(:destroy).and_return(true)

@@ -82,15 +82,15 @@ end
 #  id                | uuid                     | PRIMARY KEY
 #  name              | text                     | NOT NULL
 #  enabled           | boolean                  | NOT NULL DEFAULT false
-#  type              | vm_host_slice_type       | NOT NULL DEFAULT 'dedicated'::vm_host_slice_type
+#  is_shared         | boolean                  | NOT NULL DEFAULT false
 #  cores             | integer                  | NOT NULL
 #  total_cpu_percent | integer                  | NOT NULL
 #  used_cpu_percent  | integer                  | NOT NULL
-#  created_at        | timestamp with time zone | NOT NULL DEFAULT now()
-#  vm_host_id        | uuid                     |
 #  total_memory_gib  | integer                  | NOT NULL
 #  used_memory_gib   | integer                  | NOT NULL
-#  family            | text                     |
+#  family            | text                     | NOT NULL
+#  created_at        | timestamp with time zone | NOT NULL DEFAULT CURRENT_TIMESTAMP
+#  vm_host_id        | uuid                     | NOT NULL
 # Indexes:
 #  vm_host_slice_pkey | PRIMARY KEY btree (id)
 # Check constraints:

@@ -145,7 +145,7 @@ module Scheduling::Allocator
           .select_append { (sum(Sequel[:total_cpu_percent]) - sum(Sequel[:used_cpu_percent])).as(slice_cpu_available) }
           .select_append { (sum(Sequel[:total_memory_gib]) - sum(Sequel[:used_memory_gib])).as(slice_memory_available) }
           .where(enabled: true)
-          .where(type: "shared")
+          .where(is_shared: true)
           .where(cores: request.cores)
           .where(Sequel[:used_cpu_percent] + request.cpu_percent_limit <= Sequel[:total_cpu_percent])
           .where(Sequel[:used_memory_gib] + request.memory_gib <= Sequel[:total_memory_gib]))
@@ -365,7 +365,7 @@ module Scheduling::Allocator
             family: vm.family,
             allowed_cpus: cpus,
             memory_gib: @request.memory_gib_for_cores,
-            type: vm.can_share_slice? ? "shared" : "dedicated"
+            is_shared: vm.can_share_slice?
           )
 
           slice_id = st.subject.id

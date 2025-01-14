@@ -12,7 +12,6 @@ class DnsZone < Sequel::Model
   include ResourceMethods
   include SemaphoreMethods
   include Authorization::HyperTagMethods
-  include Authorization::TaggableMethods
 
   semaphore :refresh_dns_servers
 
@@ -31,7 +30,7 @@ class DnsZone < Sequel::Model
     fail "Type needs to be specified if data is specified!" if data && type.nil?
 
     record_name = add_dot_if_missing(record_name)
-    records = records_dataset.where(name: record_name)
+    records = records_dataset.where(name: record_name, tombstoned: false)
     records = records.where(type: type) if type
     records = records.where(data: data) if data
 

@@ -20,7 +20,6 @@ class Vm < Sequel::Model
   plugin :association_dependencies, sshable: :destroy, assigned_vm_address: :destroy, vm_storage_volumes: :destroy, load_balancers_vms: :destroy
 
   dataset_module Pagination
-  dataset_module Authorization::Dataset
 
   include ResourceMethods
   include SemaphoreMethods
@@ -29,12 +28,11 @@ class Vm < Sequel::Model
   semaphore :restart, :stop
 
   include Authorization::HyperTagMethods
+  include ObjectTag::Cleanup
 
   def hyper_tag_name(project)
     "project/#{project.ubid}/location/#{display_location}/vm/#{name}"
   end
-
-  include Authorization::TaggableMethods
 
   def firewalls
     private_subnets.flat_map(&:firewalls)
@@ -284,11 +282,11 @@ end
 #  arch                    | arch                     | NOT NULL DEFAULT 'x64'::arch
 #  allocated_at            | timestamp with time zone |
 #  provisioned_at          | timestamp with time zone |
-#  vm_host_slice_id        | uuid                     |
 #  vcpus                   | integer                  | NOT NULL
 #  memory_gib              | integer                  | NOT NULL
 #  cpu_percent_limit       | integer                  |
 #  cpu_burst_percent_limit | integer                  |
+#  vm_host_slice_id        | uuid                     |
 # Indexes:
 #  vm_pkey               | PRIMARY KEY btree (id)
 #  vm_ephemeral_net6_key | UNIQUE btree (ephemeral_net6)

@@ -10,6 +10,10 @@ class AccessControlEntry < Sequel::Model
   # use __id__ if you want the internal object id
   def_column_alias :object_id, :object_id
 
+  def update_from_ubids(hash)
+    update(hash.transform_values { UBID.to_uuid(_1) if _1 })
+  end
+
   def validate
     if project_id
       {subject_id:, action_id:, object_id:}.each do |field, value|
