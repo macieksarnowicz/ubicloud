@@ -78,6 +78,9 @@ RSpec/SpecFilePathFormat:
   Exclude:
     - 'spec/routes/**/*.rb'
 
+RSpec/MultipleMemoizedHelpers:
+  Max: 6
+
 Sequel/IrreversibleMigration:
   Enabled: false
 
