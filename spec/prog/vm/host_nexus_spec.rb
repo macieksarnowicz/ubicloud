@@ -23,8 +23,7 @@ RSpec.describe Prog::Vm::HostNexus do
 
   before do
     allow(nx).to receive_messages(vm_host: vm_host, sshable: sshable)
-    allow(vm_host).to receive(:vms).and_return(vms)
-    allow(vm_host).to receive(:vm_host_slices).and_return(vm_host_slices)
+    allow(vm_host).to receive_messages(vms: vms, vm_host_slices: vm_host_slices)
   end
 
   describe ".assemble" do

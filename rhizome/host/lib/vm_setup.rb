@@ -704,14 +704,6 @@ SERVICE
     r "systemctl restart #{q_vm}"
   end
 
-  def enable_bursting(slice_name, cpu_burst_percent_limit)
-    # Convert cpu_burst_percent limit to a usec value
-    # For now we assume that 100% == 100,000 usec, but that needs to be verified
-    cpu_burst_limit = cpu_burst_percent_limit * 1000
-
-    r "echo \"#{cpu_burst_limit}\" > /sys/fs/cgroup/#{slice_name}/#{q_vm_service}/cpu.max.burst"
-  end
-
   # Generate a MAC with the "local" (generated, non-manufacturer) bit
   # set and the multicast bit cleared in the first octet.
   #

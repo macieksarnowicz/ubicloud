@@ -4,7 +4,7 @@ require_relative "../spec_helper"
 
 RSpec.describe VmHostSlice do
   subject(:vm_host_slice) do
-    VmHostSlice.create_with_id(
+    described_class.create_with_id(
       vm_host_id: vm_host.id,
       name: "standard",
       family: "standard",
@@ -13,8 +13,7 @@ RSpec.describe VmHostSlice do
       total_cpu_percent: 200,
       used_cpu_percent: 0,
       total_memory_gib: 4,
-      used_memory_gib: 0,
-      family: "standard"
+      used_memory_gib: 0
     )
   end
 
