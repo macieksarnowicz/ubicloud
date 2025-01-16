@@ -20,9 +20,11 @@ RSpec.describe Al do
   }
 
   before do
-    allow(project).to receive(:get_ff_use_slices_for_allocation).and_return(nil)
-    allow(project).to receive(:get_ff_enable_diagnostics).and_return(nil)
-    allow(project).to receive(:get_ff_vm_public_ssh_keys).and_return(nil)
+    allow(project).to receive_messages(
+      get_ff_use_slices_for_allocation: nil,
+      get_ff_enable_diagnostics: nil,
+      get_ff_vm_public_ssh_keys: nil
+    )
     allow(vm).to receive_messages(projects: [project])
   end
 

@@ -80,12 +80,12 @@ RSpec.describe Vm do
 
     it "handles standard family" do
       vm.family = "standard"
-      expect(vm.can_share_slice?).to be_falsey
+      expect(vm.can_share_slice?).to be(false)
     end
 
     it "handles burstable family" do
       vm.family = "burstable"
-      expect(vm.can_share_slice?).to be_truthy
+      expect(vm.can_share_slice?).to be(true)
     end
   end
 

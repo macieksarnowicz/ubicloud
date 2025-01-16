@@ -42,8 +42,7 @@ RSpec.describe Prog::Test::VmHostSlices do
 
   describe "#verify_separation" do
     it "fails the test if the slices are on the same CPUs" do
-      allow(vm_host_slices).to receive(:slice_standard).and_return(slice_standard)
-      allow(vm_host_slices).to receive(:slice_burstable).and_return(slice_burstable_same)
+      allow(vm_host_slices).to receive_messages(slice_standard: slice_standard, slice_burstable: slice_burstable_same)
       expect(vm_host_slices).to receive(:fail_test).with("Standard and Burstable instances are sharing at least one cpu")
 
       # we will call fail_test which will not actually hop
@@ -51,18 +50,14 @@ RSpec.describe Prog::Test::VmHostSlices do
     end
 
     it "hops to verify_on_host" do
-      allow(vm_host_slices).to receive(:slice_standard).and_return(slice_standard)
-      allow(vm_host_slices).to receive(:slice_burstable).and_return(slice_burstable)
-
+      allow(vm_host_slices).to receive_messages(slice_standard: slice_standard, slice_burstable: slice_burstable)
       expect { vm_host_slices.verify_separation }.to hop("verify_on_host")
     end
   end
 
   describe "#verify_on_host" do
     it "fails the test if the slice is not setup correctly" do
-      allow(vm_host_slices).to receive(:slice_standard).and_return(slice_standard)
-      allow(vm_host_slices).to receive(:slice_burstable).and_return(slice_burstable)
-
+      allow(vm_host_slices).to receive_messages(slice_standard: slice_standard, slice_burstable: slice_burstable)
       expect(slice_burstable).to receive(:vm_host).and_return(vm_host)
       expect(slice_burstable).to receive(:check_pulse).and_return({reading: "down"})
       expect(slice_standard).to receive(:vm_host).and_return(vm_host)
@@ -74,9 +69,7 @@ RSpec.describe Prog::Test::VmHostSlices do
     end
 
     it "hops to finish" do
-      allow(vm_host_slices).to receive(:slice_standard).and_return(slice_standard)
-      allow(vm_host_slices).to receive(:slice_burstable).and_return(slice_burstable)
-
+      allow(vm_host_slices).to receive_messages(slice_standard: slice_standard, slice_burstable: slice_burstable)
       expect(slice_burstable).to receive(:vm_host).and_return(vm_host)
       expect(slice_burstable).to receive(:check_pulse).and_return({reading: "up"})
       expect(slice_standard).to receive(:vm_host).and_return(vm_host)
