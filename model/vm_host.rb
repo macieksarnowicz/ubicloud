@@ -163,14 +163,6 @@ class VmHost < Sequel::Model
     end
   end
 
-  def spdk_cpu_count
-    if total_cpus <= 64
-      2
-    else
-      4
-    end
-  end
-
   def create_addresses(ip_records: nil)
     ip_records ||= Hosting::Apis.pull_ips(self)
     return if ip_records.nil? || ip_records.empty?

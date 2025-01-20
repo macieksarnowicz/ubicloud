@@ -39,7 +39,10 @@ class VmHostSlice < Sequel::Model
     # Get the proportion of cores to cpus from the host
     threads_per_core = vm_host.total_cpus / vm_host.total_cores
 
-    update(cores: allocated_cpus / threads_per_core, total_cpu_percent: allocated_cpus * 100)
+    # Get the overcommit factor
+    slice_overcommit_factor = Option::VmFamilies.find { _1.name == family }.slice_overcommit_factor
+
+    update(cores: allocated_cpus / threads_per_core, total_cpu_percent: allocated_cpus * 100 * slice_overcommit_factor)
   end
 
   # Returns the name as used by systemctl and cgroup

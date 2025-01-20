@@ -395,7 +395,7 @@ module Scheduling::Allocator
       vm_host = VmHost[@candidate_host[:vm_host_id]]
 
       # Try to find an existing slice with some room
-      vm_host.vm_host_slices
+      vm_host.slices
         .select {
           (_1.used_cpu_percent + @request.cpu_percent_limit <= _1.total_cpu_percent) &&
             (_1.used_memory_gib + @request.memory_gib <= _1.total_memory_gib) &&

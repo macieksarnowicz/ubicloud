@@ -25,12 +25,12 @@ RSpec.describe Al do
       get_ff_enable_diagnostics: nil,
       get_ff_vm_public_ssh_keys: nil
     )
-    allow(vm).to receive_messages(projects: [project])
+    allow(vm).to receive_messages(project: project)
   end
 
   def create_vm_with_project(use_slices: nil, **args)
     vm = create_vm(**args)
-    allow(vm).to receive_messages(projects: [project])
+    allow(vm).to receive_messages(project: project)
     allow(project).to receive(:get_ff_use_slices_for_allocation).and_return(use_slices)
     vm
   end
@@ -740,6 +740,8 @@ RSpec.describe Al do
       [{"size_gib" => 5, "use_bdev_ubi" => false, "skip_sync" => false, "encrypted" => false, "boot" => false}]
     }
 
+    let(:prj) { Project.create_with_id(name: "default") }
+
     before do
       vmh = VmHost.create(allocation_state: "accepting", arch: "x64", location: "hetzner-fsn1", total_mem_gib: 64, total_sockets: 2, total_dies: 2, net6: "fd10:9b0b:6b4b:8fbb::/64", total_cpus: 16, total_cores: 8, used_cores: 1, total_hugepages_1g: 54, used_hugepages_1g: 2, accepts_slices: true) { _1.id = Sshable.create_with_id.id }
       BootImage.create_with_id(name: "ubuntu-jammy", version: "20220202", vm_host_id: vmh.id, activated_at: Time.now, size_gib: 3)
@@ -802,13 +804,13 @@ RSpec.describe Al do
       expected_slice_name = "#{vm.family}_#{vm.inhost_name}"
 
       # Validate the slice got created
-      expect(vmh.vm_host_slices.size).to eq(1)
-      slice = vmh.vm_host_slices.first
+      expect(vmh.slices.size).to eq(1)
+      slice = vmh.slices.first
       expect(vm.vm_host_slice).not_to be_nil
       expect(vm.vm_host_slice.id).to eq(slice.id)
 
       # All this mocking is needed to generate params_json so we can check the slice_name
-      ps = PrivateSubnet.create_with_id(name: "test-ps", location: "hetzner-fsn1", net6: "2001:db8::/64", net4: "10.0.0.0/24")
+      ps = PrivateSubnet.create_with_id(name: "test-ps", location: "hetzner-fsn1", net6: "2001:db8::/64", net4: "10.0.0.0/24", project_id: prj.id)
       nic = instance_double(Nic, id: "n2")
       expect(nic).to receive(:private_subnet).and_return(ps)
       expect(nic).to receive(:private_ipv4).and_return(NetAddr::IPv4Net.parse("192.168.1.0/32"))
@@ -883,7 +885,7 @@ RSpec.describe Al do
       expect(slice).not_to be_nil
       expect(slice.id).not_to eq(first_slice.id)
       expect(slice.allowed_cpus_cgroup).to eq("4-5")
-      expect(vh.vm_host_slices.size).to eq(2)
+      expect(vh.slices.size).to eq(2)
       expect(vh.used_cores).to eq(used_cores + slice.cores)
       expect(vh.used_hugepages_1g).to eq(used_hugepages_1g + slice.total_memory_gib)
     end
@@ -961,7 +963,7 @@ RSpec.describe Al do
       vmh.reload
 
       # Validate the slice got created
-      slice = vmh.vm_host_slices.first
+      slice = vmh.slices.first
       expect(vm.vm_host_slice).not_to be_nil
       expect(vm.vm_host_slice.id).to eq(slice.id)
 

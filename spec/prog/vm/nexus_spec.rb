@@ -604,7 +604,7 @@ RSpec.describe Prog::Vm::Nexus do
       expect(vm).to receive(:family).and_return("burstable").at_least(1)
       expect(vm).to receive(:ip4_enabled).and_return(false)
       expect(BillingRecord).to receive(:create_with_id).exactly(3).times
-      expect(vm).to receive(:projects).and_return([prj]).at_least(:once)
+      expect(vm).to receive(:project).and_return(prj).at_least(:once)
       expect { nx.create_billing_record }.to hop("wait")
     end
   end
@@ -893,6 +893,7 @@ RSpec.describe Prog::Vm::Nexus do
     it "updates slice" do
       vm_host_slice = instance_double(VmHostSlice)
       expect(vm).to receive(:vm_host_slice).and_return(vm_host_slice)
+      expect(vm).to receive(:update).with(display_state: "deleting")
       expect { nx.destroy }.to hop("destroy_slice")
     end
 

@@ -25,7 +25,6 @@ class Prog::Test::VmGroup < Prog::Test::Base
 
   label def setup_vms
     project = Project.create_with_id(name: "project-1")
-    project.associate_with_project(project)
     project.set_ff_use_slices_for_allocation(frame["test_slices"])
 
     subnet1_s = Prog::Vnet::SubnetNexus.assemble(

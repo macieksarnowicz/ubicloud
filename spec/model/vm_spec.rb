@@ -46,7 +46,7 @@ RSpec.describe Vm do
 
     before do
       allow(project).to receive(:get_ff_use_slices_for_allocation).and_return(true)
-      allow(vm).to receive_messages(projects: [project])
+      allow(vm).to receive_messages(project: project)
     end
 
     it "handles standard family" do
@@ -75,7 +75,7 @@ RSpec.describe Vm do
 
     before do
       allow(project).to receive(:get_ff_use_slices_for_allocation).and_return(true)
-      allow(vm).to receive_messages(projects: [project])
+      allow(vm).to receive_messages(project: project)
     end
 
     it "handles standard family" do

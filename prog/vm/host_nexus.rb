@@ -247,7 +247,7 @@ class Prog::Vm::HostNexus < Prog::Base
   end
 
   label def start_vm_host_slices
-    vm_host.vm_host_slices.each { |slice|
+    vm_host.slices.each { |slice|
       slice.incr_start_after_host_reboot
     }
 

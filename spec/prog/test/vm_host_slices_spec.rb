@@ -12,21 +12,21 @@ RSpec.describe Prog::Test::VmHostSlices do
     instance_double(VmHostSlice,
       id: "ff7539aa-e3e3-48d6-8a77-6e77cead900d",
       allowed_cpus_cgroup: "2-3",
-      vm_host_cpus: [instance_double(VmHostCpu, cpu_number: 2), instance_double(VmHostCpu, cpu_number: 3)])
+      cpus: [instance_double(VmHostCpu, cpu_number: 2), instance_double(VmHostCpu, cpu_number: 3)])
   }
 
   let(:slice_burstable) {
     instance_double(VmHostSlice,
       id: "115dd7bb-3081-4403-8b74-eda45e0e2fb1",
       allowed_cpus_cgroup: "4-5",
-      vm_host_cpus: [instance_double(VmHostCpu, cpu_number: 4), instance_double(VmHostCpu, cpu_number: 5)])
+      cpus: [instance_double(VmHostCpu, cpu_number: 4), instance_double(VmHostCpu, cpu_number: 5)])
   }
 
   let(:slice_burstable_same) {
     instance_double(VmHostSlice,
       id: "115dd7bb-3081-4403-8b74-eda45e0e2fb1",
       allowed_cpus_cgroup: "2-3",
-      vm_host_cpus: [instance_double(VmHostCpu, cpu_number: 2), instance_double(VmHostCpu, cpu_number: 3)])
+      cpus: [instance_double(VmHostCpu, cpu_number: 2), instance_double(VmHostCpu, cpu_number: 3)])
   }
 
   let(:vm_host) {

@@ -8,7 +8,7 @@ class Prog::Test::VmHostSlices < Prog::Test::Base
   end
 
   label def verify_separation
-    if !(slice_standard.vm_host_cpus.map(&:cpu_number) & slice_burstable.vm_host_cpus.map(&:cpu_number)).empty?
+    if !(slice_standard.cpus.map(&:cpu_number) & slice_burstable.cpus.map(&:cpu_number)).empty?
       fail_test "Standard and Burstable instances are sharing at least one cpu"
     end
 

@@ -67,7 +67,7 @@ class Vm < Sequel::Model
   end
 
   def use_slices_for_allocation?
-    projects.first.get_ff_use_slices_for_allocation || false
+    project.get_ff_use_slices_for_allocation || false
   end
 
   def can_share_slice?
@@ -75,7 +75,7 @@ class Vm < Sequel::Model
   end
 
   def enable_diagnostics?
-    projects.first.get_ff_enable_diagnostics || false
+    project.get_ff_enable_diagnostics || false
   end
 
   # cloud-hypervisor takes topology information in this format:

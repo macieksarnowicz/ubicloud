@@ -23,7 +23,7 @@ RSpec.describe Prog::Vm::HostNexus do
 
   before do
     allow(nx).to receive_messages(vm_host: vm_host, sshable: sshable)
-    allow(vm_host).to receive_messages(vms: vms, vm_host_slices: vm_host_slices)
+    allow(vm_host).to receive_messages(vms: vms, slices: vm_host_slices)
   end
 
   describe ".assemble" do
@@ -208,7 +208,6 @@ RSpec.describe Prog::Vm::HostNexus do
       end
 
       expect { nx.wait_prep }.to hop("setup_hugepages")
-      expect(vm_host.vm_host_cpus.sort_by(&:cpu_number).map(&:spdk)).to eq([true, true, false, false, false])
     end
 
     it "crashes if an expected field is not set for LearnMemory" do
