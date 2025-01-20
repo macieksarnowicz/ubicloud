@@ -3,6 +3,7 @@
 require_relative "../model"
 
 class PrivateSubnet < Sequel::Model
+  many_to_one :project
   many_to_many :vms, join_table: :nic, left_key: :private_subnet_id, right_key: :vm_id
   one_to_many :nics, key: :private_subnet_id
   one_to_one :strand, key: :id
@@ -24,9 +25,6 @@ class PrivateSubnet < Sequel::Model
   dataset_module Pagination
   include Authorization::HyperTagMethods
   include ObjectTag::Cleanup
-  def hyper_tag_name(project)
-    "project/#{project.ubid}/location/#{display_location}/private-subnet/#{name}"
-  end
 
   def connected_subnets
     PrivateSubnet.where(
@@ -142,8 +140,12 @@ end
 #  name          | text                     | NOT NULL
 #  location      | text                     | NOT NULL
 #  last_rekey_at | timestamp with time zone | NOT NULL DEFAULT now()
+#  project_id    | uuid                     | NOT NULL
 # Indexes:
-#  vm_private_subnet_pkey | PRIMARY KEY btree (id)
+#  vm_private_subnet_pkey                       | PRIMARY KEY btree (id)
+#  private_subnet_project_id_location_name_uidx | UNIQUE btree (project_id, location, name)
+# Foreign key constraints:
+#  private_subnet_project_id_fkey | (project_id) REFERENCES project(id)
 # Referenced By:
 #  connected_subnet          | connected_subnet_subnet_id_1_fkey                | (subnet_id_1) REFERENCES private_subnet(id)
 #  connected_subnet          | connected_subnet_subnet_id_2_fkey                | (subnet_id_2) REFERENCES private_subnet(id)

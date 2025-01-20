@@ -48,7 +48,7 @@ RSpec.describe Clover, "private subnet" do
         expect(page.title).to eq("Ubicloud - Private Subnets")
         expect(page).to have_content "No Private Subnets"
 
-        click_link "New Private Subnet"
+        click_link "Create Private Subnet"
         expect(page.title).to eq("Ubicloud - Create Private Subnet")
       end
 
@@ -60,6 +60,23 @@ RSpec.describe Clover, "private subnet" do
         expect(page.title).to eq("Ubicloud - Private Subnets")
         expect(page).to have_content private_subnet.name
         expect(page).to have_no_content ps_wo_permission.name
+      end
+
+      it "does not show new/create subnet without PrivateSubnet:create permissions" do
+        visit "#{project.path}/private-subnet"
+        expect(page).to have_content "Create Private Subnet"
+        expect(page).to have_content "Get started by creating a new Private Subnet."
+
+        AccessControlEntry.dataset.destroy
+        AccessControlEntry.create(project_id: project.id, subject_id: user.id, action_id: ActionType::NAME_MAP["PrivateSubnet:view"])
+
+        page.refresh
+        expect(page).to have_content "No Private Subnets"
+        expect(page).to have_content "You don't have permission to create Private Subnets."
+
+        private_subnet
+        page.refresh
+        expect(page).to have_no_content "Create Private Subnet"
       end
     end
 
@@ -78,7 +95,7 @@ RSpec.describe Clover, "private subnet" do
         expect(page.title).to eq("Ubicloud - #{name}")
         expect(page).to have_flash_notice("'#{name}' will be ready in a few seconds")
         expect(PrivateSubnet.count).to eq(1)
-        expect(PrivateSubnet.first.projects.first.id).to eq(project.id)
+        expect(PrivateSubnet.first.project_id).to eq(project.id)
       end
 
       it "can not create private subnet with same name" do
@@ -93,7 +110,7 @@ RSpec.describe Clover, "private subnet" do
         click_button "Create"
 
         expect(page.title).to eq("Ubicloud - Create Private Subnet")
-        expect(page).to have_flash_error("project_id and name is already taken")
+        expect(page).to have_flash_error("project_id and location and name is already taken")
       end
     end
 
@@ -138,7 +155,7 @@ RSpec.describe Clover, "private subnet" do
     describe "show firewalls" do
       it "can show attached firewalls" do
         private_subnet
-        fw = Firewall.create_with_id(name: "dummy-fw", description: "dummy-fw", location: "hetzner-fsn1")
+        fw = Firewall.create_with_id(name: "dummy-fw", description: "dummy-fw", location: "hetzner-fsn1", project_id: project.id)
         fw.associate_with_private_subnet(private_subnet)
 
         visit "#{project.path}#{private_subnet.path}"
@@ -158,6 +175,13 @@ RSpec.describe Clover, "private subnet" do
         visit "#{project.path}#{private_subnet.path}"
 
         expect(page).to have_content ps2.name
+        expect(page.all("a").map(&:text)).to include ps2.name
+
+        AccessControlEntry.dataset.destroy
+        AccessControlEntry.create_with_id(project_id: project.id, subject_id: user.id, action_id: ActionType::NAME_MAP["PrivateSubnet:view"], object_id: private_subnet.id)
+        page.refresh
+        expect(page).to have_content ps2.name
+        expect(page.all("a").map(&:text)).not_to include ps2.name
       end
 
       it "can disconnect connected subnet" do

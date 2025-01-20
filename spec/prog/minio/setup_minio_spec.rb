@@ -7,7 +7,6 @@ RSpec.describe Prog::Minio::SetupMinio do
 
   let(:minio_server) {
     prj = Project.create_with_id(name: "default")
-    prj.associate_with_project(prj)
     ps = Prog::Vnet::SubnetNexus.assemble(
       prj.id, name: "minio-cluster-name"
     )
@@ -21,7 +20,8 @@ RSpec.describe Prog::Minio::SetupMinio do
       root_cert_1: "root_cert_1",
       root_cert_key_1: "root_cert_key_1",
       root_cert_2: "root_cert_2",
-      root_cert_key_2: "root_cert_key_2"
+      root_cert_key_2: "root_cert_key_2",
+      project_id: prj.id
     )
 
     mp = MinioPool.create_with_id(

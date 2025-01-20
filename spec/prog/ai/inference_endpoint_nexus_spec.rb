@@ -48,12 +48,12 @@ RSpec.describe Prog::Ai::InferenceEndpointNexus do
   end
 
   describe ".assemble" do
-    let(:customer_project) { Project.create_with_id(name: "default").tap { _1.associate_with_project(_1) } }
-    let(:ie_project) { Project.create_with_id(name: "default").tap { _1.associate_with_project(_1) } }
+    let(:customer_project) { Project.create_with_id(name: "default") }
+    let(:ie_project) { Project.create_with_id(name: "default") }
 
     it "validates input" do
       expect(Config).to receive(:inference_endpoint_service_project_id).and_return(ie_project.id).at_least(:once)
-      Firewall.create_with_id(name: "inference-endpoint-firewall", location: "hetzner-fsn1").tap { _1.associate_with_project(ie_project) }
+      Firewall.create_with_id(name: "inference-endpoint-firewall", location: "hetzner-fsn1", project_id: ie_project.id)
       DnsZone.create_with_id(name: "ai.ubicloud.com", project_id: ie_project.id)
 
       expect {
@@ -96,6 +96,13 @@ RSpec.describe Prog::Ai::InferenceEndpointNexus do
         expect(st.subject.load_balancer.stack).to eq("ipv4")
       }.not_to raise_error
 
+      Firewall.dataset.destroy
+      InferenceEndpointReplica.dataset.destroy
+      InferenceEndpoint.dataset.destroy
+      LoadBalancer.dataset.destroy
+      Nic.dataset.destroy
+      PrivateSubnet.dataset.destroy
+      Vm.dataset.destroy
       expect {
         ie_project.destroy
         described_class.assemble(project_id: customer_project.id, location: "hetzner-fsn1", boot_image: "ai-ubuntu-2404-nvidia", name: "test-endpoint", vm_size: "standard-gpu-6", storage_volumes: [{encrypted: true, size_gib: 80}], model_name: "llama-3-1-8b-it", engine: "vllm", engine_params: "", replica_count: 1, is_public: false, gpu_count: 1, tags: {})
@@ -104,7 +111,7 @@ RSpec.describe Prog::Ai::InferenceEndpointNexus do
 
     it "works without dns zone" do
       expect(Config).to receive(:inference_endpoint_service_project_id).and_return(ie_project.id).at_least(:once)
-      Firewall.create_with_id(name: "inference-endpoint-firewall", location: "hetzner-fsn1").tap { _1.associate_with_project(ie_project) }
+      Firewall.create_with_id(name: "inference-endpoint-firewall", location: "hetzner-fsn1", project_id: ie_project.id)
       expect {
         described_class.assemble(project_id: customer_project.id, location: "hetzner-fsn1", boot_image: "ai-ubuntu-2404-nvidia", name: "test-endpoint", vm_size: "standard-gpu-6", storage_volumes: [{encrypted: true, size_gib: 80}], model_name: "llama-3-1-8b-it", engine: "vllm", engine_params: "", replica_count: 1, is_public: false, gpu_count: 1, tags: {})
       }.not_to raise_error
@@ -173,8 +180,6 @@ RSpec.describe Prog::Ai::InferenceEndpointNexus do
 
     it "destroys the inference_endpoint" do
       allow(nx).to receive(:replicas).and_return([])
-      expect(nx).to receive(:project)
-      expect(inference_endpoint).to receive(:dissociate_with_project)
       expect(inference_endpoint).to receive(:destroy)
       expect { nx.self_destroy }.to exit({"msg" => "inference endpoint is deleted"})
     end

@@ -79,15 +79,27 @@ module Authorization
         object_id = UBID.parse(object_id).to_uuid
       end
 
-      if (klass = UBID.class_for_ubid(ubid))
+      klass = UBID.class_for_ubid(ubid)
+      klass = ApiKey if ubid.start_with?("et")
+      in_project_cond = if klass
         # This checks that the object being authorized is actually related to the project.
         # This is probably a redundant check, but I think it helps to have defense in depth
         # here.  This makes it so if a project-level restriction is missed before the
         # authorization call, this will make authorization fail.
-        dataset = klass.filter_authorize_dataset(dataset, object_id)
+        check_project_id = if klass == Project
+          object_id
+        elsif klass == ObjectMetatag
+          ObjectTag.dataset.where(id: klass.from_meta_uuid(object_id)).select(:project_id)
+        else
+          klass.where(id: object_id).select(:project_id)
+        end
+
+        {project_id: check_project_id}
+      else
+        false
       end
 
-      dataset = dataset.where(Sequel.or([nil, object_id, recursive_tag_query(:object, object_id)].map { [:object_id, _1] }))
+      dataset = dataset.where(Sequel.or([nil, object_id, recursive_tag_query(:object, object_id)].map { [:object_id, _1] }) & in_project_cond)
     end
 
     dataset
@@ -109,12 +121,6 @@ module Authorization
           .select(Sequel[:applied_object_tag][:object_id], Sequel[:level] + 1)
           .where { level < Config.recursive_tag_limit },
         args: [:object_id, :level]).select(:object_id)
-
-    project_id_match = if dataset.model.columns.include?(:project_id)
-      Sequel[from][:project_id]
-    else
-      DB[:access_tag].select(:project_id).where(hyper_tag_id: Sequel[from][:id])
-    end
 
     if dataset.model == ObjectTag
       # Authorization for accessing ObjectTag itself is done by providing the metatag for the object.
@@ -139,48 +145,15 @@ module Authorization
       {Sequel[from][:id] => ds},
       # or where the action is allowed for all objects in the project,
       (ds.where(object_id: nil).exists &
-        # and the object is related to the project (either with a matching project_id,
-        # or where there is a hyper tag from the object to the project.
-        {project_id => project_id_match})
+        # and the object is related to the project
+        {project_id => Sequel[from][:project_id]})
     ))
   end
 
   module HyperTagMethods
-    module ClassMethods
-      def filter_authorize_dataset(dataset, object_id)
-        dataset.where(project_id: DB[:access_tag].where(hyper_tag_id: object_id).select(:project_id))
-      end
-    end
-
-    def self.included(base)
-      base.class_eval do
-        extend ClassMethods
-        many_to_many :projects, join_table: :access_tag, left_key: :hyper_tag_id, right_key: :project_id
-      end
-    end
-
-    def hyper_tag_name(project = nil)
-      raise NoMethodError
-    end
-
-    def hyper_tag(project)
-      AccessTag.where(project_id: project.id, hyper_tag_id: id).first
-    end
-
-    def associate_with_project(project)
-      return if project.nil?
-
-      AccessTag.create_with_id(
-        project_id: project.id,
-        name: hyper_tag_name(project),
-        hyper_tag_id: id,
-        hyper_tag_table: self.class.table_name
-      )
-    end
-
-    def dissociate_with_project(project)
-      return if project.nil?
-      hyper_tag(project).destroy
+    def before_destroy
+      AccessTag.where(hyper_tag_id: id).destroy
+      super
     end
   end
 end

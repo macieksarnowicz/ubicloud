@@ -12,7 +12,7 @@ RSpec.describe Prog::Minio::MinioClusterNexus do
     )
   }
 
-  let(:minio_project) { Project.create_with_id(name: "default").tap { _1.associate_with_project(_1) } }
+  let(:minio_project) { Project.create_with_id(name: "default") }
 
   describe ".assemble" do
     before do
@@ -50,7 +50,7 @@ RSpec.describe Prog::Minio::MinioClusterNexus do
       expect(MinioCluster.first.server_count).to eq 1
       expect(MinioCluster.first.drive_count).to eq 1
       expect(MinioCluster.first.pools.first.vm_size).to eq "standard-2"
-      expect(MinioCluster.first.projects).to eq [minio_project]
+      expect(MinioCluster.first.project).to eq minio_project
       expect(MinioCluster.first.strand.label).to eq "wait_pools"
     end
   end
@@ -165,7 +165,6 @@ RSpec.describe Prog::Minio::MinioClusterNexus do
       expect(ps).to receive(:incr_destroy)
       expect(fw).to receive(:destroy)
       expect(nx.minio_cluster).to receive(:private_subnet).and_return(ps).at_least(:once)
-      expect(nx.minio_cluster).to receive(:dissociate_with_project).with(minio_project)
       expect(nx.minio_cluster).to receive(:destroy)
       expect { nx.wait_pools_destroyed }.to exit({"msg" => "destroyed"})
     end

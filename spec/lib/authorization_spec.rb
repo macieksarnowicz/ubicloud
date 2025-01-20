@@ -255,49 +255,4 @@ RSpec.describe Authorization do
       end
     end
   end
-
-  describe "#HyperTagMethods" do
-    it "hyper_tag_name" do
-      expect(users[0].hyper_tag_name).to eq("user/auth1@example.com")
-      p = vms[0].projects.first
-      expect(vms[0].hyper_tag_name(p)).to eq("project/#{p.ubid}/location/eu-central-h1/vm/vm0")
-      expect(projects[0].hyper_tag_name).to eq("project/#{projects[0].ubid}")
-    end
-
-    it "hyper_tag_name error" do
-      c = Class.new(Sequel::Model) do
-        include Authorization::HyperTagMethods
-      end
-
-      expect { c.new.hyper_tag_name }.to raise_error NoMethodError
-    end
-
-    it "hyper_tag methods" do
-      project = Project.create_with_id(name: "test")
-      expect(project.hyper_tag(project)).to be_nil
-
-      project.associate_with_project(project)
-      expect(project.hyper_tag(project)).to exist
-
-      project.dissociate_with_project(project)
-      expect(project.hyper_tag(project)).to be_nil
-    end
-
-    it "associate/dissociate with project" do
-      project = Project.create_with_id(name: "test")
-      expect(users[0].hyper_tag(project)).to be_nil
-      users[0].associate_with_project(project)
-      expect(users[0].hyper_tag(project)).to exist
-      users[0].dissociate_with_project(project)
-      expect(users[0].hyper_tag(project)).to be_nil
-    end
-
-    it "does not associate/dissociate with nil project" do
-      project = Project.create_with_id(name: "test")
-      expect(project.associate_with_project(nil)).to be_nil
-      expect(users[0].hyper_tag(project)).to be_nil
-      expect(project.dissociate_with_project(nil)).to be_nil
-      expect(users[0].hyper_tag(project)).to be_nil
-    end
-  end
 end

@@ -43,7 +43,7 @@ RSpec.describe Clover, "vm" do
         expect(page.title).to eq("Ubicloud - Virtual Machines")
         expect(page).to have_content "No virtual machines"
 
-        click_link "New Virtual Machine"
+        click_link "Create Virtual Machine"
         expect(page.title).to eq("Ubicloud - Create Virtual Machine")
       end
 
@@ -77,9 +77,86 @@ RSpec.describe Clover, "vm" do
         expect(page.title).to eq("Ubicloud - #{name}")
         expect(page).to have_flash_notice("'#{name}' will be ready in a few minutes")
         expect(Vm.count).to eq(1)
-        expect(Vm.first.projects.first.id).to eq(project.id)
+        expect(Vm.first.project_id).to eq(project.id)
         expect(Vm.first.private_subnets.first.id).not_to be_nil
         expect(Vm.first.ip4_enabled).to be_falsey
+
+        visit project.path
+        expect(page).to have_content("2/32 (6%)")
+        Vm.first.update(vcpus: 25)
+        page.refresh
+        expect(page).to have_content("25/32 (78%)")
+        Vm.first.update(vcpus: 31)
+        page.refresh
+        expect(page).to have_content("31/32 (96%)")
+      end
+
+      it "shows expected information on index page" do
+        project
+
+        visit "#{project.path}/vm"
+        expect(page).to have_content "Get started by creating a new virtual machine."
+        click_link "Create Virtual Machine"
+        expect(page.title).to eq("Ubicloud - Create Virtual Machine")
+
+        click_button "Create"
+        vm_host = VmHost.new_with_id(location: "test")
+        Sshable.create { |s| s.id = vm_host.id }
+        vm_host.save_changes
+        address = Address.create(
+          cidr: "1.2.3.0/24",
+          routed_to_host_id: vm_host.id
+        )
+        vm.assigned_vm_address = AssignedVmAddress.new_with_id(
+          ip: "1.2.3.4",
+          address_id: address.id
+        )
+        spdk_installation = SpdkInstallation.create(
+          version: "1",
+          allocation_weight: 1
+        ) { |obj| obj.id = SpdkInstallation.generate_uuid }
+        storage_device = StorageDevice.create(
+          name: "t",
+          total_storage_gib: 147,
+          available_storage_gib: 24
+        )
+        storage_volume = VmStorageVolume.new(
+          boot: true,
+          size_gib: 123,
+          disk_index: 1,
+          spdk_installation_id: spdk_installation.id,
+          storage_device_id: storage_device.id
+        )
+        vm.add_vm_storage_volume(storage_volume)
+
+        visit "#{project.path}/vm"
+        page.refresh
+        expect(page).to have_content "Create Virtual Machine"
+        expect(page).to have_content "123 GB"
+        expect(page).to have_content "1.2.3.4"
+
+        click_link vm.name
+        expect(page).to have_content "123 GB"
+        expect(page.body).to include "auto-refresh hidden"
+
+        vm.this.update(display_state: "running")
+        page.refresh
+        expect(page.body).not_to include "auto-refresh hidden"
+
+        AccessControlEntry.dataset.destroy
+        AccessControlEntry.create(project_id: project.id, subject_id: user.id, action_id: ActionType::NAME_MAP["Vm:view"])
+        storage_volume.update(size_gib: 0)
+        vm.assigned_vm_address.destroy
+        vm.update(ephemeral_net6: nil)
+        visit "#{project.path}/vm"
+        expect(page).to have_no_content "Create Virtual Machine"
+        expect(page).to have_content "Not assigned yet"
+
+        Nic.dataset.destroy
+        vm.destroy
+        page.refresh
+        expect(page).to have_no_content "New Virtual Machine"
+        expect(page).to have_content "You don't have permission to create virtual machines."
       end
 
       it "can create new virtual machine with public ipv4" do
@@ -100,7 +177,7 @@ RSpec.describe Clover, "vm" do
         expect(page.title).to eq("Ubicloud - #{name}")
         expect(page).to have_flash_notice("'#{name}' will be ready in a few minutes")
         expect(Vm.count).to eq(1)
-        expect(Vm.first.projects.first.id).to eq(project.id)
+        expect(Vm.first.project_id).to eq(project.id)
         expect(Vm.first.private_subnets.first.id).not_to be_nil
         expect(Vm.first.ip4_enabled).to be_truthy
       end
@@ -125,7 +202,7 @@ RSpec.describe Clover, "vm" do
         expect(page.title).to eq("Ubicloud - #{name}")
         expect(page).to have_flash_notice("'#{name}' will be ready in a few minutes")
         expect(Vm.count).to eq(1)
-        expect(Vm.first.projects.first.id).to eq(project.id)
+        expect(Vm.first.project_id).to eq(project.id)
         expect(Vm.first.private_subnets.first.id).to eq(ps.id)
       end
 
@@ -149,7 +226,7 @@ RSpec.describe Clover, "vm" do
         expect(page.title).to eq("Ubicloud - #{name}")
         expect(page).to have_flash_notice("'#{name}' will be ready in a few minutes")
         expect(Vm.count).to eq(1)
-        expect(Vm.first.projects.first.id).to eq(project.id)
+        expect(Vm.first.project_id).to eq(project.id)
         expect(Vm.first.private_subnets.first.id).not_to eq(ps.id)
         expect(Vm.first.private_subnets.first.name).to eq("default-#{LocationNameConverter.to_display_name(ps.location)}")
 
@@ -200,7 +277,7 @@ RSpec.describe Clover, "vm" do
         click_button "Create"
 
         expect(page.title).to eq("Ubicloud - Create Virtual Machine")
-        expect(page).to have_flash_error("project_id and name is already taken")
+        expect(page).to have_flash_error("project_id and location and name is already taken")
       end
 
       it "can not create virtual machine if project has no valid payment method" do

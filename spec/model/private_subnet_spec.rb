@@ -9,7 +9,8 @@ RSpec.describe PrivateSubnet do
       net4: NetAddr.parse_net("10.9.39.0/26"),
       location: "hetzner-fsn1",
       state: "waiting",
-      name: "ps"
+      name: "ps",
+      project_id: Project.create(name: "test").id
     )
   }
 
@@ -23,22 +24,26 @@ RSpec.describe PrivateSubnet do
 
   describe "random ip generation" do
     it "returns random private ipv4" do
+      private_subnet
       expect(SecureRandom).to receive(:random_number).with(59).and_return(5)
       expect(private_subnet.random_private_ipv4.to_s).to eq "10.9.39.9/32"
     end
 
     it "returns random private ipv6" do
+      private_subnet
       expect(SecureRandom).to receive(:random_number).with(32766).and_return(5)
       expect(private_subnet.random_private_ipv6.to_s).to eq "fd1b:9793:dcef:cd0a:c::/79"
     end
 
     it "returns random private ipv4 when ip exists" do
+      private_subnet
       expect(SecureRandom).to receive(:random_number).with(59).and_return(1, 2)
       expect(private_subnet).to receive(:nics).and_return([existing_nic]).twice
       expect(private_subnet.random_private_ipv4.to_s).to eq "10.9.39.6/32"
     end
 
     it "returns random private ipv6 when ip exists" do
+      private_subnet
       expect(SecureRandom).to receive(:random_number).with(32766).and_return(5, 6)
       expect(private_subnet).to receive(:nics).and_return([existing_nic]).twice
       expect(private_subnet.random_private_ipv6.to_s).to eq "fd1b:9793:dcef:cd0a:e::/79"
@@ -79,11 +84,11 @@ RSpec.describe PrivateSubnet do
     it "includes ubid if id is available" do
       ubid = described_class.generate_ubid
       private_subnet.id = ubid.to_uuid.to_s
-      expect(private_subnet.inspect).to eq "#<PrivateSubnet[\"#{ubid}\"] @values={:net6=>\"fd1b:9793:dcef:cd0a::/64\", :net4=>\"10.9.39.0/26\", :location=>\"hetzner-fsn1\", :state=>\"waiting\", :name=>\"ps\"}>"
+      expect(private_subnet.inspect).to eq "#<PrivateSubnet[\"#{ubid}\"] @values={:net6=>\"fd1b:9793:dcef:cd0a::/64\", :net4=>\"10.9.39.0/26\", :location=>\"hetzner-fsn1\", :state=>\"waiting\", :name=>\"ps\", :project_id=>\"#{private_subnet.project.ubid}\"}>"
     end
 
     it "does not includes ubid if id is missing" do
-      expect(private_subnet.inspect).to eq "#<PrivateSubnet @values={:net6=>\"fd1b:9793:dcef:cd0a::/64\", :net4=>\"10.9.39.0/26\", :location=>\"hetzner-fsn1\", :state=>\"waiting\", :name=>\"ps\"}>"
+      expect(private_subnet.inspect).to eq "#<PrivateSubnet @values={:net6=>\"fd1b:9793:dcef:cd0a::/64\", :net4=>\"10.9.39.0/26\", :location=>\"hetzner-fsn1\", :state=>\"waiting\", :name=>\"ps\", :project_id=>\"#{private_subnet.project.ubid}\"}>"
     end
   end
 
@@ -96,11 +101,6 @@ RSpec.describe PrivateSubnet do
   describe "ui utility methods" do
     it "returns path" do
       expect(private_subnet.path).to eq "/location/eu-central-h1/private-subnet/ps"
-    end
-
-    it "returns tag name" do
-      pr = instance_double(Project, ubid: "prjubid")
-      expect(private_subnet.hyper_tag_name(pr)).to eq "project/prjubid/location/eu-central-h1/private-subnet/ps"
     end
   end
 
@@ -117,7 +117,7 @@ RSpec.describe PrivateSubnet do
 
   describe "destroy" do
     it "destroys firewalls private subnets" do
-      ps = described_class.create_with_id(name: "test-ps", location: "hetzner-fsn1", net6: "2001:db8::/64", net4: "10.0.0.0/24")
+      ps = described_class.create_with_id(name: "test-ps", location: "hetzner-fsn1", net6: "2001:db8::/64", net4: "10.0.0.0/24", project_id: Project.create(name: "test").id)
       fwps = instance_double(FirewallsPrivateSubnets)
       expect(FirewallsPrivateSubnets).to receive(:where).with(private_subnet_id: ps.id).and_return(instance_double(Sequel::Dataset, all: [fwps]))
       expect(fwps).to receive(:destroy).once
@@ -158,9 +158,7 @@ RSpec.describe PrivateSubnet do
 
   describe "connected subnets related methods" do
     let(:prj) {
-      prj = Project.create_with_id(name: "test-prj")
-      prj.associate_with_project(prj)
-      prj
+      Project.create_with_id(name: "test-prj")
     }
 
     let(:ps1) {

@@ -6,6 +6,7 @@ require_relative "../model"
 class Vm < Sequel::Model
   one_to_one :strand, key: :id
   many_to_one :vm_host
+  many_to_one :project
   one_to_many :nics, key: :vm_id, class: :Nic
   many_to_many :private_subnets, join_table: :nic, left_key: :vm_id, right_key: :private_subnet_id
   one_to_one :sshable, key: :id
@@ -29,10 +30,6 @@ class Vm < Sequel::Model
 
   include Authorization::HyperTagMethods
   include ObjectTag::Cleanup
-
-  def hyper_tag_name(project)
-    "project/#{project.ubid}/location/#{display_location}/vm/#{name}"
-  end
 
   def firewalls
     private_subnets.flat_map(&:firewalls)
@@ -204,7 +201,7 @@ class Vm < Sequel::Model
   def params_json(swap_size_bytes)
     topo = cloud_hypervisor_cpu_topology
 
-    project_public_keys = projects.first.get_ff_vm_public_ssh_keys || []
+    project_public_keys = project.get_ff_vm_public_ssh_keys || []
 
     # we don't write secrets to params_json, because it
     # shouldn't be stored in the host for security reasons.
@@ -287,11 +284,14 @@ end
 #  cpu_percent_limit       | integer                  |
 #  cpu_burst_percent_limit | integer                  |
 #  vm_host_slice_id        | uuid                     |
+#  project_id              | uuid                     | NOT NULL
 # Indexes:
-#  vm_pkey               | PRIMARY KEY btree (id)
-#  vm_ephemeral_net6_key | UNIQUE btree (ephemeral_net6)
+#  vm_pkey                          | PRIMARY KEY btree (id)
+#  vm_ephemeral_net6_key            | UNIQUE btree (ephemeral_net6)
+#  vm_project_id_location_name_uidx | UNIQUE btree (project_id, location, name)
 # Foreign key constraints:
 #  vm_pool_id_fkey          | (pool_id) REFERENCES vm_pool(id)
+#  vm_project_id_fkey       | (project_id) REFERENCES project(id)
 #  vm_vm_host_id_fkey       | (vm_host_id) REFERENCES vm_host(id)
 #  vm_vm_host_slice_id_fkey | (vm_host_slice_id) REFERENCES vm_host_slice(id)
 # Referenced By:

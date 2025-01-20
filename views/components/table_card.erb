@@ -1,19 +1,24 @@
-<%# locals: (title: nil, headers: [], rows: [], empty_state: nil) %>
+<%# locals: (title: nil, headers: [], rows:, empty_state: nil, right_items: nil) %>
 
 <div>
-  <% if title %>
+  <% if title || right_items %>
     <div class="md:flex md:items-center md:justify-between pb-2 lg:pb-4">
       <div class="min-w-0 flex-1">
         <h3 class="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:text-2xl sm:tracking-tight">
           <%= title %>
         </h3>
       </div>
+      <% if right_items %>
+        <div class="mt-4 flex md:ml-4 md:mt-0">
+          <%== right_items.join %>
+        </div>
+      <% end %>
     </div>
   <% end %>
 
   <div class="overflow-hidden rounded-lg shadow ring-1 ring-black ring-opacity-5 bg-white divide-y divide-gray-200">
     <table class="min-w-full divide-y divide-gray-300">
-      <% unless headers.empty? %>
+      <% unless headers.empty? || rows.empty? %>
         <thead class="bg-gray-50">
           <tr>
             <% headers.each_with_index do |name, i| %>
@@ -37,39 +42,31 @@
         <% if rows.empty? %>
           <tr>
             <td colspan="<%= headers.length %>" class="text-center py-4 px-8 lg:px-32">
-              <%== empty_state %>
+              <% if empty_state.is_a?(Hash) %>
+                <%== render("components/empty_state", { locals: empty_state }) %>
+              <% else %>
+                <%== empty_state %>
+              <% end %>
             </td>
           </tr>
         <% else %>
           <% rows.each do |columns, row_opts| %>
             <% row_opts ||= {} %>
-            <tr <% if row_opts[:id] %> id="<%= row_opts[:id] %>" <% end %>>
+            <tr id="<%= row_opts[:id] %>">
               <% columns.each_with_index do |(value, col_opts), i| %>
                 <% col_opts ||= {} %>
                 <td
-                  <% if i == 0 %>
-                  class="pl-4 pr-3 sm:pl-6 py-4 text-gray-900 font-medium whitespace-nowrap text-sm"
-                  <% elsif i + 1 == columns.length %>
-                  class="pl-3 pr-4 sm:pr-6 py-4 text-gray-500 whitespace-nowrap text-sm"
-                  <% else %>
-                  class="px-3 py-4 text-gray-500 whitespace-nowrap text-sm"
-                  <% end %>
+                  <% if i == 0
+                      cls="pl-4 pr-3 sm:pl-6 py-4 text-gray-900 font-medium whitespace-nowrap text-sm"
+                    elsif i + 1 == columns.length
+                      cls="pl-3 pr-4 sm:pr-6 py-4 text-gray-500 whitespace-nowrap text-sm"
+                    else
+                      cls="px-3 py-4 text-gray-500 whitespace-nowrap text-sm"
+                    end
+                  %>
+                  class="<%= cls %> <%= col_opts[:extra_class] %>"
                 >
-                  <% if col_opts[:copyable] && value %>
-                    <%== render("components/copyable_content", locals: { content: value, message: "Copied", revealable: col_opts[:revealable] }) %>
-                  <% elsif col_opts[:revealable] && value %>
-                    <%== render("components/revealable_content", locals: { content: value }) %>
-                  <% elsif col_opts[:link] %>
-                    <a href="<%= col_opts[:link] %>" class="font-medium text-orange-600 hover:text-orange-700">
-                      <%= value %>
-                    </a>
-                  <% elsif col_opts[:component] %>
-                    <%== render("components/#{value}", locals: col_opts[:component]) %>
-                  <% elsif col_opts[:escape] == false %>
-                    <%== value %>
-                  <% else %>
-                    <%= value || "-" %>
-                  <% end %>
+                  <%== render("components/value_content", locals: { content: value, opts: col_opts }) %>
                 </td>
               <% end %>
             </tr>

@@ -3,20 +3,15 @@
 require_relative "../model"
 
 class ApiKey < Sequel::Model
+  many_to_one :project
+
   include ResourceMethods
   include Authorization::HyperTagMethods
   include SubjectTag::Cleanup # personal access tokens
   include ObjectTag::Cleanup # inference tokens
 
-  one_to_many :access_tags, key: :hyper_tag_id
-  plugin :association_dependencies, access_tags: :destroy
-
   plugin :column_encryption do |enc|
     enc.column :key
-  end
-
-  def hyper_tag_name(project = nil)
-    "api-key/#{ubid}"
   end
 
   def self.ubid_type
@@ -27,25 +22,21 @@ class ApiKey < Sequel::Model
     ubid
   end
 
-  def self.create_personal_access_token(account, project: nil)
-    pat = create_with_id(owner_table: "accounts", owner_id: account.id, used_for: "api")
-    pat.associate_with_project(project) if project
-    pat
+  def self.create_personal_access_token(account, project:)
+    create_with_id(owner_table: "accounts", owner_id: account.id, used_for: "api", project_id: project.id)
   end
 
   def self.create_inference_api_key(project)
-    token = ApiKey.create_with_id(owner_table: "project", owner_id: project.id, used_for: "inference_endpoint")
-    token.associate_with_project(project)
-    token
+    create_with_id(owner_table: "project", owner_id: project.id, used_for: "inference_endpoint", project_id: project.id)
   end
 
-  def self.create_with_id(owner_table:, owner_id:, used_for:)
+  def self.create_with_id(owner_table:, owner_id:, used_for:, project_id:)
     unless %w[project inference_endpoint accounts].include?(owner_table.to_s)
       fail "Invalid owner_table: #{owner_table}"
     end
 
     key = SecureRandom.alphanumeric(32)
-    super(owner_table:, owner_id:, key:, used_for:)
+    super(owner_table:, owner_id:, key:, used_for:, project_id:)
   end
 
   def unrestricted_token_for_project?(project_id)
@@ -86,6 +77,9 @@ end
 #  used_for    | text                     | NOT NULL
 #  key         | text                     | NOT NULL
 #  is_valid    | boolean                  | NOT NULL DEFAULT true
+#  project_id  | uuid                     | NOT NULL
 # Indexes:
 #  api_key_pkey                       | PRIMARY KEY btree (id)
 #  api_key_owner_table_owner_id_index | btree (owner_table, owner_id)
+# Foreign key constraints:
+#  api_key_project_id_fkey | (project_id) REFERENCES project(id)

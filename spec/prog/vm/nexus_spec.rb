@@ -57,12 +57,12 @@ RSpec.describe Prog::Vm::Nexus do
     }
     vm
   }
-  let(:prj) { Project.create_with_id(name: "default").tap { _1.associate_with_project(_1) } }
+  let(:prj) { Project.create_with_id(name: "default") }
 
   describe ".assemble" do
     let(:ps) {
       PrivateSubnet.create(name: "ps", location: "hetzner-fsn1", net6: "fd10:9b0b:6b4b:8fbb::/64",
-        net4: "1.1.1.0/26", state: "waiting") { _1.id = "57afa8a7-2357-4012-9632-07fbe13a3133" }
+        net4: "1.1.1.0/26", state: "waiting", project_id: prj.id) { _1.id = "57afa8a7-2357-4012-9632-07fbe13a3133" }
     }
     let(:nic) {
       Nic.new(private_subnet_id: ps.id,
@@ -283,7 +283,7 @@ RSpec.describe Prog::Vm::Nexus do
       expect(vm).to receive(:cloud_hypervisor_cpu_topology).and_return(Vm::CloudHypervisorCpuTopo.new(1, 1, 1, 1))
       expect(vm).to receive(:pci_devices).and_return([pci]).at_least(:once)
       prj.set_ff_vm_public_ssh_keys(["operator_ssh_key"])
-      expect(vm).to receive(:projects).and_return([prj]).at_least(:once)
+      expect(vm).to receive(:project).and_return(prj).at_least(:once)
 
       sshable = instance_spy(Sshable)
       expect(sshable).to receive(:cmd).with("common/bin/daemonizer --check prep_#{nx.vm_name}").and_return("NotStarted")
@@ -582,19 +582,19 @@ RSpec.describe Prog::Vm::Nexus do
       expect(vm).to receive(:assigned_vm_address).and_return(vm_addr).at_least(:once)
       expect(vm).to receive(:ip4_enabled).and_return(true)
       expect(BillingRecord).to receive(:create_with_id).exactly(4).times
-      expect(vm).to receive(:projects).and_return([prj]).at_least(:once)
+      expect(vm).to receive(:project).and_return(prj).at_least(:once)
       expect { nx.create_billing_record }.to hop("wait")
     end
 
     it "creates billing records when ip4 is not enabled" do
       expect(vm).to receive(:ip4_enabled).and_return(false)
       expect(BillingRecord).to receive(:create_with_id).exactly(3).times
-      expect(vm).to receive(:projects).and_return([prj]).at_least(:once)
+      expect(vm).to receive(:project).and_return(prj).at_least(:once)
       expect { nx.create_billing_record }.to hop("wait")
     end
 
     it "not create billing records when the project is not billable" do
-      expect(vm).to receive(:projects).and_return([prj]).at_least(:once)
+      expect(vm).to receive(:project).and_return(prj).at_least(:once)
       expect(prj).to receive(:billable).and_return(false)
       expect(BillingRecord).not_to receive(:create_with_id)
       expect { nx.create_billing_record }.to hop("wait")

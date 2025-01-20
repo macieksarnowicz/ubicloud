@@ -30,9 +30,8 @@ class Prog::Vnet::LoadBalancerNexus < Prog::Base
         health_check_timeout: health_check_timeout, health_check_up_threshold: health_check_up_threshold,
         health_check_down_threshold: health_check_down_threshold, health_check_protocol: health_check_protocol,
         custom_hostname: custom_hostname, custom_hostname_dns_zone_id: custom_hostname_dns_zone_id,
-        stack: stack
+        stack: stack, project_id: ps.project_id
       )
-      lb.associate_with_project(ps.projects.first)
 
       Strand.create(prog: "Vnet::LoadBalancerNexus", label: "wait") { _1.id = lb.id }
     end
@@ -152,7 +151,6 @@ class Prog::Vnet::LoadBalancerNexus < Prog::Base
   label def wait_destroy
     reap
     if leaf?
-      load_balancer.projects.each { |prj| load_balancer.dissociate_with_project(prj) }
       load_balancer.destroy
 
       pop "load balancer deleted"

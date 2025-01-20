@@ -54,6 +54,9 @@ module Config
   optional :omniauth_github_secret, string, clear: true
   optional :omniauth_google_id, string, clear: true
   optional :omniauth_google_secret, string, clear: true
+  optional :hetzner_ssh_private_key, string, clear: true
+  optional :hetzner_ssh_private_key_passphrase, string, clear: true
+  optional :operator_ssh_public_keys, string
 
   # :nocov:
   override :mail_driver, (production? ? :smtp : :logger), symbol
@@ -89,7 +92,7 @@ module Config
   override :hetzner_connection_string, "https://robot-ws.your-server.de", string
   override :managed_service, false, bool
   override :sanctioned_countries, "CU,IR,KP,SY", array(string)
-  override :hetzner_ssh_key, string
+  override :hetzner_ssh_public_key, string
   override :minimum_invoice_charge_threshold, 0.5, float
   optional :cloudflare_turnstile_site_key, string
   optional :cloudflare_turnstile_secret_key, string
@@ -162,7 +165,7 @@ module Config
   override :postgres17_paradedb_ubuntu_2204_version, "20250103.1.0", string
   override :postgres16_lantern_ubuntu_2204_version, "20250103.1.0", string
   override :postgres17_lantern_ubuntu_2204_version, "20250103.1.0", string
-  override :ai_ubuntu_2404_nvidia_version, "20250108.1.0", string
+  override :ai_ubuntu_2404_nvidia_version, "20250118.1.0", string
 
   # Allocator
   override :allocator_target_host_utilization, 0.55, float
@@ -185,4 +188,7 @@ module Config
 
   # AI
   optional :inference_endpoint_service_project_id, string
+
+  # DNS
+  optional :dns_service_project_id, string
 end

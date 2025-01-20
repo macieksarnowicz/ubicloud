@@ -3,6 +3,7 @@
 require_relative "../model"
 
 class Firewall < Sequel::Model
+  many_to_one :project
   one_to_many :firewall_rules, key: :firewall_id
   many_to_many :private_subnets
 
@@ -11,9 +12,6 @@ class Firewall < Sequel::Model
   include ResourceMethods
   include Authorization::HyperTagMethods
   include ObjectTag::Cleanup
-  def hyper_tag_name(project)
-    "project/#{project.ubid}/location/#{display_location}/firewall/#{name}"
-  end
 
   dataset_module Pagination
 
@@ -54,13 +52,10 @@ class Firewall < Sequel::Model
     private_subnets.each(&:incr_update_firewall_rules)
   end
 
-  def destroy
-    DB.transaction do
-      private_subnets.each(&:incr_update_firewall_rules)
-      projects.each { |p| dissociate_with_project(p) }
-      FirewallsPrivateSubnets.where(firewall_id: id).all.each(&:destroy)
-      super
-    end
+  def before_destroy
+    private_subnets.each(&:incr_update_firewall_rules)
+    FirewallsPrivateSubnets.where(firewall_id: id).destroy
+    super
   end
 
   def associate_with_private_subnet(private_subnet, apply_firewalls: true)
@@ -85,8 +80,12 @@ end
 #  description | text                        | NOT NULL DEFAULT 'Default firewall'::text
 #  created_at  | timestamp without time zone | NOT NULL DEFAULT CURRENT_TIMESTAMP
 #  location    | text                        | NOT NULL
+#  project_id  | uuid                        | NOT NULL
 # Indexes:
-#  firewall_pkey | PRIMARY KEY btree (id)
+#  firewall_pkey                          | PRIMARY KEY btree (id)
+#  firewall_project_id_location_name_uidx | UNIQUE btree (project_id, location, name)
+# Foreign key constraints:
+#  firewall_project_id_fkey | (project_id) REFERENCES project(id)
 # Referenced By:
 #  firewall_rule             | firewall_rule_firewall_id_fkey             | (firewall_id) REFERENCES firewall(id)
 #  firewalls_private_subnets | firewalls_private_subnets_firewall_id_fkey | (firewall_id) REFERENCES firewall(id)

@@ -3,6 +3,7 @@
 require_relative "../../model"
 
 class MinioCluster < Sequel::Model
+  many_to_one :project
   one_to_many :pools, key: :cluster_id, class: :MinioPool do |ds|
     ds.order(:start_index)
   end
@@ -22,14 +23,6 @@ class MinioCluster < Sequel::Model
     enc.column :admin_password
     enc.column :root_cert_key_1
     enc.column :root_cert_key_2
-  end
-
-  def hyper_tag_name(project)
-    "project/#{project.ubid}/location/#{display_location}/minio-cluster/#{name}"
-  end
-
-  def display_location
-    LocationNameConverter.to_display_name(location)
   end
 
   def generate_etc_hosts_entry
@@ -97,9 +90,12 @@ end
 #  root_cert_2                 | text                        |
 #  root_cert_key_2             | text                        |
 #  certificate_last_checked_at | timestamp with time zone    | NOT NULL DEFAULT now()
+#  project_id                  | uuid                        | NOT NULL
 # Indexes:
-#  minio_cluster_pkey | PRIMARY KEY btree (id)
+#  minio_cluster_pkey                          | PRIMARY KEY btree (id)
+#  minio_cluster_project_id_location_name_uidx | UNIQUE btree (project_id, location, name)
 # Foreign key constraints:
 #  minio_cluster_private_subnet_id_fkey | (private_subnet_id) REFERENCES private_subnet(id)
+#  minio_cluster_project_id_fkey        | (project_id) REFERENCES project(id)
 # Referenced By:
 #  minio_pool | minio_pool_cluster_id_fkey | (cluster_id) REFERENCES minio_cluster(id)

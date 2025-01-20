@@ -37,7 +37,7 @@ RSpec.describe Clover, "load-balancer" do
   describe "authenticated" do
     before do
       login_api(user.email)
-      lb_project = Project.create_with_id(name: "default").tap { _1.associate_with_project(_1) }
+      lb_project = Project.create_with_id(name: "default")
       allow(Config).to receive(:load_balancer_service_project_id).and_return(lb_project.id)
     end
 
@@ -146,7 +146,7 @@ RSpec.describe Clover, "load-balancer" do
         nic = Nic.create_with_id(name: "nic-1", private_subnet_id: lb.private_subnet.id, mac: "00:00:00:00:00:01", private_ipv4: "1.1.1.1", private_ipv6: "2001:db8::1")
         vm = create_vm
         nic.update(vm_id: vm.id)
-        vm.associate_with_project(project)
+        vm.update(project_id: project.id)
         vm
       }
 
@@ -206,7 +206,7 @@ RSpec.describe Clover, "load-balancer" do
 
       it "vm already attached to a different load balancer" do
         lb2 = Prog::Vnet::LoadBalancerNexus.assemble(lb.private_subnet.id, name: "lb-2", src_port: 80, dst_port: 80).subject
-        dz = DnsZone.create_with_id(name: "test-dns-zone", project_id: lb2.private_subnet.projects.first.id)
+        dz = DnsZone.create_with_id(name: "test-dns-zone2", project_id: lb2.private_subnet.project_id)
         cert = Prog::Vnet::CertNexus.assemble("test-host-name", dz.id).subject
         lb2.add_cert(cert)
         lb2.add_vm(vm)
@@ -238,7 +238,7 @@ RSpec.describe Clover, "load-balancer" do
       }
 
       it "success" do
-        vm.associate_with_project(project)
+        vm.update(project_id: project.id)
         post "/project/#{project.ubid}/location/#{TEST_LOCATION}/load-balancer/#{lb.name}/attach-vm", {vm_id: vm.ubid}.to_json
 
         expect(last_response.status).to eq(200)
@@ -260,7 +260,7 @@ RSpec.describe Clover, "load-balancer" do
       }
 
       it "success" do
-        vm.associate_with_project(project)
+        vm.update(project_id: project.id)
         lb.add_vm(vm)
 
         post "/project/#{project.ubid}/location/#{TEST_LOCATION}/load-balancer/#{lb.name}/detach-vm", {vm_id: vm.ubid}.to_json

@@ -11,16 +11,12 @@ RSpec.describe Clover, "load balancer" do
 
   let(:lb) do
     ps = Prog::Vnet::SubnetNexus.assemble(project.id, name: "dummy-ps-1", location: "hetzner-fsn1").subject
-    lb = LoadBalancer.create_with_id(private_subnet_id: ps.id, name: "dummy-lb-1", src_port: 80, dst_port: 80, health_check_endpoint: "/up")
-    lb.associate_with_project(project)
-    lb
+    LoadBalancer.create_with_id(private_subnet_id: ps.id, name: "dummy-lb-1", src_port: 80, dst_port: 80, health_check_endpoint: "/up", project_id: project.id)
   end
 
   let(:lb_wo_permission) {
     ps = Prog::Vnet::SubnetNexus.assemble(project_wo_permissions.id, name: "dummy-ps-2", location: "hetzner-fsn1").subject
-    lb = LoadBalancer.create_with_id(private_subnet_id: ps.id, name: "dummy-lb-2", src_port: 80, dst_port: 80, health_check_endpoint: "/up")
-    lb.associate_with_project(project_wo_permissions)
-    lb
+    LoadBalancer.create_with_id(private_subnet_id: ps.id, name: "dummy-lb-2", src_port: 80, dst_port: 80, health_check_endpoint: "/up", project_id: project_wo_permissions.id)
   }
 
   describe "unauthenticated" do
@@ -49,7 +45,7 @@ RSpec.describe Clover, "load balancer" do
         expect(page.title).to eq("Ubicloud - Load Balancers")
         expect(page).to have_content "No Load Balancers"
 
-        click_link "New Load Balancer"
+        click_link "Create Load Balancer"
         expect(page.title).to eq("Ubicloud - Create Load Balancer")
       end
 
@@ -61,6 +57,25 @@ RSpec.describe Clover, "load balancer" do
         expect(page.title).to eq("Ubicloud - Load Balancers")
         expect(page).to have_content lb.name
         expect(page).to have_no_content lb_wo_permission.name
+        expect(page).to have_no_content "Waiting for hostname to be ready"
+        expect(page).to have_content "Create Load Balancer"
+
+        AccessControlEntry.dataset.destroy
+        AccessControlEntry.create(project_id: project.id, subject_id: user.id, action_id: ActionType::NAME_MAP["LoadBalancer:view"])
+        page.refresh
+        expect(page).to have_no_content "Create Load Balancer"
+      end
+
+      it "handles case where the user does not have permissions to create load balancers" do
+        visit "#{project.path}/load-balancer"
+        expect(page).to have_content "Get started by creating a new Load Balancer."
+        expect(page).to have_no_content "You don't have permission to create Load Balancers."
+
+        AccessControlEntry.dataset.destroy
+        AccessControlEntry.create(project_id: project.id, subject_id: user.id, action_id: ActionType::NAME_MAP["LoadBalancer:view"])
+        page.refresh
+        expect(page).to have_content "You don't have permission to create Load Balancers."
+        expect(page).to have_no_content "Get started by creating a new Load Balancer."
       end
     end
 
@@ -85,7 +100,7 @@ RSpec.describe Clover, "load balancer" do
         expect(page.title).to eq("Ubicloud - #{name}")
         expect(page).to have_flash_notice("'#{name}' is created")
         expect(LoadBalancer.count).to eq(1)
-        expect(LoadBalancer.first.projects.first.id).to eq(project.id)
+        expect(LoadBalancer.first.project_id).to eq(project.id)
       end
 
       it "can not create load balancer with invalid name" do

@@ -20,8 +20,7 @@ class Prog::Vnet::SubnetNexus < Prog::Base
     ipv6_range ||= random_private_ipv6(location, project).to_s
     ipv4_range ||= random_private_ipv4(location, project).to_s
     DB.transaction do
-      ps = PrivateSubnet.create(name: name, location: location, net6: ipv6_range, net4: ipv4_range, state: "waiting") { _1.id = ubid.to_uuid }
-      ps.associate_with_project(project)
+      ps = PrivateSubnet.create(name: name, location: location, net6: ipv6_range, net4: ipv4_range, state: "waiting", project_id:) { _1.id = ubid.to_uuid }
 
       firewall = if firewall_id
         existing_fw = project.firewalls_dataset.where(location: location).first(Sequel[:firewall][:id] => firewall_id)
@@ -29,8 +28,7 @@ class Prog::Vnet::SubnetNexus < Prog::Base
         existing_fw
       else
         port_range = allow_only_ssh ? 22..22 : 0..65535
-        new_fw = Firewall.create_with_id(name: "#{name}-default", location: location)
-        new_fw.associate_with_project(project)
+        new_fw = Firewall.create_with_id(name: "#{name}-default", location: location, project_id:)
         ["0.0.0.0/0", "::/0"].each { |cidr| FirewallRule.create_with_id(firewall_id: new_fw.id, cidr: cidr, port_range: Sequel.pg_range(port_range)) }
         new_fw
       end
@@ -160,10 +158,7 @@ class Prog::Vnet::SubnetNexus < Prog::Base
     end
 
     if private_subnet.nics.empty? && private_subnet.load_balancers.empty?
-      DB.transaction do
-        private_subnet.projects.each { |p| private_subnet.dissociate_with_project(p) }
-        private_subnet.destroy
-      end
+      private_subnet.destroy
       pop "subnet destroyed"
     else
       private_subnet.nics.map { |n| n.incr_destroy }

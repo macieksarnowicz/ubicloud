@@ -84,7 +84,7 @@ jobs:
       run: |
         echo "e2e: bin/ci --test-cases=${{ github.event_name != 'workflow_dispatch' && 'vm,github_runner_ubuntu_2204,github_runner_ubuntu_2004' || inputs.test_cases }}" >> Procfile
 
-    - name: Run services
+    - name: Run tests
       env:
         RACK_ENV: production
         CLOVER_DATABASE_URL: postgres://${{ env.DB_USER }}:${{ env.DB_PASSWORD }}@localhost:5432/${{ env.DB_NAME }}
@@ -112,38 +112,40 @@ jobs:
         GITHUB_CACHE_BLOB_STORAGE_API_KEY: ${{ secrets.GH_CACHE_BLOB_STORAGE_API_KEY }}
         VM_POOL_PROJECT_ID: ${{ secrets.VM_POOL_PROJECT_ID }}
         E2E_GITHUB_INSTALLATION_ID: ${{ secrets.E2E_GH_INSTALLATION_ID }}
-      run: timeout 40m foreman start
+        HETZNER_SSH_PUBLIC_KEY: ${{ secrets.HETZNER_SSH_PUBLIC_KEY }}
+        HETZNER_SSH_PRIVATE_KEY: ${{ secrets.HETZNER_SSH_PRIVATE_KEY }}
+      run: |
+        set -o pipefail
+        timeout 40m foreman start | tee foreman.log | grep "e2e.1"
+
+    - name: Print logs
+      if: always()
+      run: grep -h -v -E "sleep_duration_sec|monitor.1" foreman.log
+
+    - name: Upload logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: e2e-${{ github.run_id }}-logs
+        path: foreman.log
 
     - name: Send notification if failed
       if: ${{ failure() && github.ref_name == 'main' }}
-      uses: slackapi/slack-github-action@v1.27.0
+      uses: slackapi/slack-github-action@v2.0.0
       with:
+        webhook: ${{ secrets.SLACK_WEBHOOK_PAGER_URL }}
+        webhook-type: incoming-webhook
         payload: |
-          {
-            "text": "*E2E Tests Failed* :this-is-fine-fire:",
-            "attachments": [
-              {
-                "color": "E33122",
-                "fields": [
-                  {
-                    "title": "Event",
-                    "short": true,
-                    "value": "${{ github.event_name }}"
-                  },
-                  {
-                    "title": "Reference",
-                    "short": true,
-                    "value": "<${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.ref_name }}>"
-                  },
-                  {
-                    "title": "Action",
-                    "short": false,
-                    "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|${{ github.workflow }}>"
-                  }
-                ]
-              }
-            ]
-          }
-      env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_PAGER_URL }}
-        SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+          text: "*E2E Tests Failed* :this-is-fine-fire:"
+          attachments:
+            - color: "E33122"
+              fields:
+                - title: "Event"
+                  short: true
+                  value: "${{ github.event_name }}"
+                - title: "Reference"
+                  short: true
+                  value: "<${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.ref_name }}>"
+                - title: "Action"
+                  short: false
+                  value: "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|${{ github.workflow }}>"

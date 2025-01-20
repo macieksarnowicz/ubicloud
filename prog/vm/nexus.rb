@@ -102,11 +102,10 @@ class Prog::Vm::Nexus < Prog::Base
         boot_image: boot_image,
         ip4_enabled: enable_ip4,
         pool_id: pool_id,
-        arch: arch
+        arch: arch,
+        project_id:
       ) { _1.id = ubid.to_uuid }
       nic.update(vm_id: vm.id)
-
-      vm.associate_with_project(project)
 
       gpu_count = 1 if gpu_count == 0 && vm_size.gpu
       Strand.create(
@@ -306,7 +305,7 @@ class Prog::Vm::Nexus < Prog::Base
   label def create_billing_record
     vm.update(display_state: "running", provisioned_at: Time.now)
     Clog.emit("vm provisioned") { [vm, {provision: {vm_ubid: vm.ubid, vm_host_ubid: host.ubid, duration: Time.now - vm.allocated_at}}] }
-    project = vm.projects.first
+    project = vm.project
     hop_wait unless project.billable
 
     BillingRecord.create_with_id(
@@ -536,7 +535,6 @@ class Prog::Vm::Nexus < Prog::Base
         nic.update(vm_id: nil)
         nic.incr_destroy
       end
-      vm.projects.map { vm.dissociate_with_project(_1) }
       vm.destroy
     end
   end

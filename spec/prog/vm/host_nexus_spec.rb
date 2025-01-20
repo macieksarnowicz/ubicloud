@@ -18,8 +18,8 @@ RSpec.describe Prog::Vm::HostNexus do
 
   let(:vms) { [instance_double(Vm, memory_gib: 1), instance_double(Vm, memory_gib: 2)] }
   let(:vm_host_slices) { [instance_double(VmHostSlice, name: "standard1"), instance_double(VmHostSlice, name: "standard2")] }
-  let(:sshable) { Sshable.create_with_id }
-  let(:vm_host) { VmHost.create(location: "x", total_cpus: 48) { _1.id = sshable.id } }
+  let(:vm_host) { instance_double(VmHost, vms: vms, slices: vm_host_slices, id: "1d422893-2955-4c2c-b41c-f2ec70bcd60d", spdk_cpu_count: 2) }
+  let(:sshable) { instance_double(Sshable, raw_private_key_1: "bogus") }
 
   before do
     allow(nx).to receive_messages(vm_host: vm_host, sshable: sshable)
@@ -79,14 +79,78 @@ RSpec.describe Prog::Vm::HostNexus do
   end
 
   describe "#start" do
+    it "hops to setup_ssh_keys" do
+      expect { nx.start }.to hop("setup_ssh_keys")
+    end
+  end
+
+  describe "#setup_ssh_keys" do
+    it "generates a keypair if one is not set" do
+      expect(Config).to receive(:hetzner_ssh_private_key).and_return(nil)
+      expect(sshable).to receive(:raw_private_key_1).and_return(nil)
+      expect(sshable).to receive(:update) do |**args|
+        key = args[:raw_private_key_1]
+        expect(key).to be_instance_of String
+        expect(key.length).to eq 64
+      end
+
+      expect { nx.setup_ssh_keys }.to hop("bootstrap_rhizome")
+    end
+
+    it "does not generate a keypair if one is already set" do
+      expect(Config).to receive(:hetzner_ssh_private_key).and_return(nil)
+      expect(sshable).to receive(:raw_private_key_1).and_return("bogus")
+      expect(sshable).not_to receive(:update)
+      expect { nx.setup_ssh_keys }.to hop("bootstrap_rhizome")
+    end
+
+    it "skips if private key is not set" do
+      expect(Config).to receive(:hetzner_ssh_private_key).and_return(nil)
+      expect(Util).not_to receive(:rootish_ssh)
+
+      expect { nx.setup_ssh_keys }.to hop("bootstrap_rhizome")
+    end
+
+    it "adds a public key if private key is set" do
+      root_key = SshKey.generate
+      vmhost_key = SshKey.generate
+      test_public_keys = vmhost_key.public_key.to_s
+
+      expect(Config).to receive(:hetzner_ssh_private_key).exactly(2).and_return(root_key.private_key)
+      expect(Config).to receive(:operator_ssh_public_keys).and_return(nil)
+      expect(sshable).to receive(:keys).and_return([vmhost_key])
+      expect(sshable).to receive(:host).and_return("127.0.0.1")
+      expect(Util).to receive(:rootish_ssh).with("127.0.0.1", "root", anything, "echo '#{test_public_keys}' > ~/.ssh/authorized_keys")
+
+      expect { nx.setup_ssh_keys }.to hop("bootstrap_rhizome")
+    end
+
+    it "adds operational keys if set" do
+      root_key = SshKey.generate
+      vmhost_key = SshKey.generate
+      operational_key_1 = SshKey.generate
+      operational_key_2 = SshKey.generate
+      test_public_keys = "#{vmhost_key.public_key}\n#{operational_key_1.public_key}\n#{operational_key_2.public_key}"
+
+      expect(Config).to receive(:hetzner_ssh_private_key).exactly(2).and_return(root_key.private_key)
+      expect(Config).to receive(:operator_ssh_public_keys).exactly(2).and_return("#{operational_key_1.public_key}\n#{operational_key_2.public_key}")
+      expect(sshable).to receive(:keys).and_return([vmhost_key])
+      expect(sshable).to receive(:host).and_return("127.0.0.1")
+      expect(Util).to receive(:rootish_ssh).with("127.0.0.1", "root", anything, "echo '#{test_public_keys}' > ~/.ssh/authorized_keys")
+
+      expect { nx.setup_ssh_keys }.to hop("bootstrap_rhizome")
+    end
+  end
+
+  describe "#bootstrap_rhizome" do
     it "pushes a bootstrap rhizome process" do
       expect(nx).to receive(:push).with(Prog::BootstrapRhizome, {"target_folder" => "host"}).and_call_original
-      expect { nx.start }.to hop("start", "BootstrapRhizome")
+      expect { nx.bootstrap_rhizome }.to hop("start", "BootstrapRhizome")
     end
 
     it "hops once BootstrapRhizome has returned" do
       nx.strand.retval = {"msg" => "rhizome user bootstrapped and source installed"}
-      expect { nx.start }.to hop("prep")
+      expect { nx.bootstrap_rhizome }.to hop("prep")
     end
   end
 
@@ -138,6 +202,10 @@ RSpec.describe Prog::Vm::HostNexus do
         instance_double(Strand, prog: "LearnCpu", exitval: {"arch" => "arm64", "total_sockets" => 2, "total_dies" => 3, "total_cores" => 4, "total_cpus" => 5}),
         instance_double(Strand, prog: "ArbitraryOtherProg")
       ])
+
+      (0..4).each do |i|
+        expect(VmHostCpu).to receive(:create).with(vm_host_id: vm_host.id, cpu_number: i, spdk: i < 2)
+      end
 
       expect { nx.wait_prep }.to hop("setup_hugepages")
       expect(vm_host.vm_host_cpus.sort_by(&:cpu_number).map(&:spdk)).to eq([true, true, false, false, false])
@@ -229,6 +297,11 @@ RSpec.describe Prog::Vm::HostNexus do
       expect { nx.wait }.to nap(30)
     end
 
+    it "hops to prep_graceful_reboot when needed" do
+      expect(nx).to receive(:when_graceful_reboot_set?).and_yield
+      expect { nx.wait }.to hop("prep_graceful_reboot")
+    end
+
     it "hops to prep_reboot when needed" do
       expect(nx).to receive(:when_reboot_set?).and_yield
       expect { nx.wait }.to hop("prep_reboot")
@@ -299,6 +372,41 @@ RSpec.describe Prog::Vm::HostNexus do
     end
   end
 
+  describe "host graceful reboot" do
+    it "prep_graceful_reboot sets allocation_state to draining if it is in accepting" do
+      expect(vm_host).to receive(:allocation_state).and_return("accepting")
+      expect(vm_host).to receive(:update).with(allocation_state: "draining")
+      expect(vm_host).to receive(:vms_dataset).and_return([true])
+      expect { nx.prep_graceful_reboot }.to nap(30)
+    end
+
+    it "prep_graceful_reboot does not change allocation_state if it is already draining" do
+      expect(vm_host).to receive(:allocation_state).and_return("draining")
+      expect(vm_host).not_to receive(:update)
+      expect(vm_host).to receive(:vms_dataset).and_return([true])
+      expect { nx.prep_graceful_reboot }.to nap(30)
+    end
+
+    it "prep_graceful_reboot fails if not in accepting or draining state" do
+      expect(vm_host).to receive(:allocation_state).and_return("unprepared")
+      expect(vm_host).not_to receive(:update)
+      expect(vm_host).not_to receive(:vms_dataset)
+      expect { nx.prep_graceful_reboot }.to raise_error(RuntimeError)
+    end
+
+    it "prep_graceful_reboot transitions to prep_reboot if there are no VMs" do
+      expect(vm_host).to receive(:allocation_state).and_return("draining")
+      expect(vm_host).to receive(:vms_dataset).and_return([])
+      expect { nx.prep_graceful_reboot }.to hop("prep_reboot")
+    end
+
+    it "prep_graceful_reboot transitions to nap if there are VMs" do
+      expect(vm_host).to receive(:allocation_state).and_return("draining")
+      expect(vm_host).to receive(:vms_dataset).and_return([true])
+      expect { nx.prep_graceful_reboot }.to nap(30)
+    end
+  end
+
   describe "host reboot" do
     it "prep_reboot transitions to reboot" do
       expect(nx).to receive(:get_boot_id).and_return("xyz")
@@ -308,14 +416,14 @@ RSpec.describe Prog::Vm::HostNexus do
       expect { nx.prep_reboot }.to hop("reboot")
     end
 
-    it "reboot naps if reboot-host fails causes IOError" do
-      expect(vm_host).to receive(:last_boot_id).and_return("xyz")
-      expect(sshable).to receive(:cmd).with("sudo host/bin/reboot-host xyz").and_raise(IOError)
+    it "reboot naps if host sshable is not available" do
+      expect(sshable).to receive(:available?).and_return(false)
 
       expect { nx.reboot }.to nap(30)
     end
 
     it "reboot naps if reboot-host returns empty string" do
+      expect(sshable).to receive(:available?).and_return(true)
       expect(vm_host).to receive(:last_boot_id).and_return("xyz")
       expect(sshable).to receive(:cmd).with("sudo host/bin/reboot-host xyz").and_return ""
 
@@ -323,6 +431,7 @@ RSpec.describe Prog::Vm::HostNexus do
     end
 
     it "reboot updates last_boot_id and hops to verify_spdk" do
+      expect(sshable).to receive(:available?).and_return(true)
       expect(vm_host).to receive(:last_boot_id).and_return("xyz")
       expect(sshable).to receive(:cmd).with("sudo host/bin/reboot-host xyz").and_return "pqr\n"
       expect(vm_host).to receive(:update).with(last_boot_id: "pqr")
@@ -345,6 +454,21 @@ RSpec.describe Prog::Vm::HostNexus do
       expect(vm_host).to receive(:allocation_state).and_return("unprepared")
       expect(vm_host).to receive(:update).with(allocation_state: "accepting")
       expect { nx.start_vms }.to hop("wait")
+    end
+
+    it "start_vms starts vms & becomes accepting & hops to wait if was draining an in graceful reboot" do
+      expect(vm_host).to receive(:allocation_state).twice.and_return("draining")
+      expect(nx).to receive(:when_graceful_reboot_set?).and_yield
+      expect(vms).to all receive(:incr_start_after_host_reboot)
+      expect(vm_host).to receive(:update).with(allocation_state: "accepting")
+      expect { nx.start_vms }.to hop("wait")
+    end
+
+    it "start_vms starts vms & raises if not in draining and in graceful reboot" do
+      expect(vm_host).to receive(:allocation_state).and_return("accepting")
+      expect(nx).to receive(:when_graceful_reboot_set?).and_yield
+      expect(vms).to all receive(:incr_start_after_host_reboot)
+      expect { nx.start_vms }.to raise_error(RuntimeError)
     end
 
     it "start_vms starts vms & hops to wait if accepting" do

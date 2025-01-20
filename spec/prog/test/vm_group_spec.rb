@@ -109,7 +109,6 @@ RSpec.describe Prog::Test::VmGroup do
 
     it "runs tests for the first connected subnet" do
       prj = Project.create_with_id(name: "project-1")
-      prj.associate_with_project(prj)
       ps1 = Prog::Vnet::SubnetNexus.assemble(prj.id, name: "ps1", location: "hetzner-fsn1").subject
       ps2 = Prog::Vnet::SubnetNexus.assemble(prj.id, name: "ps2", location: "hetzner-fsn1").subject
       expect(vg_test).to receive(:frame).and_return({"subnets" => [ps1.id, ps2.id]}).at_least(:once)
@@ -118,7 +117,6 @@ RSpec.describe Prog::Test::VmGroup do
 
     it "runs tests for the second connected subnet" do
       prj = Project.create_with_id(name: "project-1")
-      prj.associate_with_project(prj)
       ps1 = Prog::Vnet::SubnetNexus.assemble(prj.id, name: "ps1", location: "hetzner-fsn1").subject
       expect(ps1).to receive(:vms).and_return([instance_double(Vm, id: "vm1"), instance_double(Vm, id: "vm2")]).at_least(:once)
       ps2 = Prog::Vnet::SubnetNexus.assemble(prj.id, name: "ps2", location: "hetzner-fsn1").subject
@@ -166,7 +164,7 @@ RSpec.describe Prog::Test::VmGroup do
     it "hops to wait_resources_destroyed" do
       allow(vg_test).to receive(:frame).and_return({"vms" => ["vm_id"], "subnets" => ["subnet_id"]}).twice
       expect(Vm).to receive(:[]).with("vm_id").and_return(instance_double(Vm, incr_destroy: nil))
-      expect(PrivateSubnet).to receive(:[]).with("subnet_id").and_return(instance_double(PrivateSubnet, incr_destroy: nil))
+      expect(PrivateSubnet).to receive(:[]).with("subnet_id").and_return(instance_double(PrivateSubnet, incr_destroy: nil, firewalls: []))
       expect { vg_test.destroy_resources }.to hop("wait_resources_destroyed")
     end
   end

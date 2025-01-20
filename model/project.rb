@@ -14,13 +14,15 @@ class Project < Sequel::Model
   many_through_many :github_runners, [[:github_installation, :project_id, :id], [:github_runner, :installation_id, :id]]
 
   many_to_many :accounts, join_table: :access_tag, left_key: :project_id, right_key: :hyper_tag_id
-  many_to_many :vms, join_table: :access_tag, left_key: :project_id, right_key: :hyper_tag_id
-  many_to_many :minio_clusters, join_table: :access_tag, left_key: :project_id, right_key: :hyper_tag_id
-  many_to_many :private_subnets, join_table: :access_tag, left_key: :project_id, right_key: :hyper_tag_id
-  many_to_many :postgres_resources, join_table: :access_tag, left_key: :project_id, right_key: :hyper_tag_id
-  many_to_many :firewalls, join_table: :access_tag, left_key: :project_id, right_key: :hyper_tag_id
-  many_to_many :load_balancers, join_table: :access_tag, left_key: :project_id, right_key: :hyper_tag_id
-  many_to_many :inference_endpoints, join_table: :access_tag, left_key: :project_id, right_key: :hyper_tag_id
+  one_to_many :vms
+  one_to_many :minio_clusters
+  one_to_many :private_subnets
+  one_to_many :postgres_resources
+  one_to_many :firewalls
+  one_to_many :load_balancers
+  one_to_many :inference_endpoints
+
+  RESOURCE_ASSOCIATIONS = %i[vms minio_clusters private_subnets postgres_resources firewalls load_balancers]
 
   one_to_many :invoices, order: Sequel.desc(:created_at)
   one_to_many :quotas, class: :ProjectQuota, key: :project_id
@@ -32,15 +34,6 @@ class Project < Sequel::Model
   plugin :association_dependencies, access_tags: :destroy, billing_info: :destroy, github_installations: :destroy, api_keys: :destroy, access_control_entries: :destroy, subject_tags: :destroy, action_tags: :destroy, object_tags: :destroy
 
   include ResourceMethods
-  include Authorization::HyperTagMethods
-
-  def self.filter_authorize_dataset(dataset, object_id)
-    dataset.where(project_id: object_id)
-  end
-
-  def hyper_tag_name(project = nil)
-    "project/#{ubid}"
-  end
 
   def has_valid_payment_method?
     return true unless Config.stripe_secret_key
@@ -72,7 +65,7 @@ class Project < Sequel::Model
   end
 
   def has_resources
-    access_tags_dataset.exclude(hyper_tag_table: [Account.table_name.to_s, Project.table_name.to_s, AccessTag.table_name.to_s]).count > 0 || github_installations.flat_map(&:runners).count > 0
+    RESOURCE_ASSOCIATIONS.any? { !send(:"#{_1}_dataset").empty? } || github_installations.flat_map(&:runners).count > 0
   end
 
   def soft_delete
@@ -191,8 +184,14 @@ end
 #  access_policy        | access_policy_project_id_fkey        | (project_id) REFERENCES project(id)
 #  access_tag           | access_tag_project_id_fkey           | (project_id) REFERENCES project(id)
 #  action_tag           | action_tag_project_id_fkey           | (project_id) REFERENCES project(id)
+#  api_key              | api_key_project_id_fkey              | (project_id) REFERENCES project(id)
+#  firewall             | firewall_project_id_fkey             | (project_id) REFERENCES project(id)
 #  github_installation  | github_installation_project_id_fkey  | (project_id) REFERENCES project(id)
 #  inference_endpoint   | inference_endpoint_project_id_fkey   | (project_id) REFERENCES project(id)
+#  load_balancer        | load_balancer_project_id_fkey        | (project_id) REFERENCES project(id)
+#  minio_cluster        | minio_cluster_project_id_fkey        | (project_id) REFERENCES project(id)
 #  object_tag           | object_tag_project_id_fkey           | (project_id) REFERENCES project(id)
+#  private_subnet       | private_subnet_project_id_fkey       | (project_id) REFERENCES project(id)
 #  subject_tag          | subject_tag_project_id_fkey          | (project_id) REFERENCES project(id)
 #  usage_alert          | usage_alert_project_id_fkey          | (project_id) REFERENCES project(id)
+#  vm                   | vm_project_id_fkey                   | (project_id) REFERENCES project(id)

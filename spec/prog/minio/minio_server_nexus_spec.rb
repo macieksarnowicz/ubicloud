@@ -15,6 +15,7 @@ RSpec.describe Prog::Minio::MinioServerNexus do
       admin_user: "minio-admin",
       admin_password: "dummy-password",
       private_subnet_id: ps.id,
+      project_id: minio_project.id,
       root_cert_1: "root_cert_1",
       root_cert_key_1: "root_cert_key_1",
       root_cert_2: "root_cert_2",
@@ -45,7 +46,7 @@ RSpec.describe Prog::Minio::MinioServerNexus do
     }
   }
 
-  let(:minio_project) { Project.create_with_id(name: "default").tap { _1.associate_with_project(_1) } }
+  let(:minio_project) { Project.create_with_id(name: "default") }
 
   before do
     allow(Config).to receive(:minio_service_project_id).and_return(minio_project.id)
@@ -67,6 +68,12 @@ RSpec.describe Prog::Minio::MinioServerNexus do
       expect(Vm.first.unix_user).to eq "ubi"
       expect(Vm.first.sshable.host).to eq "temp_#{Vm.first.id}"
       expect(Vm.first.private_subnets.first.id).to eq minio_pool.cluster.private_subnet_id
+
+      expect(Vm.first.strand.stack[0]["storage_volumes"].length).to eq 2
+      expect(Vm.first.strand.stack[0]["storage_volumes"][0]["encrypted"]).to be true
+      expect(Vm.first.strand.stack[0]["storage_volumes"][0]["size_gib"]).to eq 30
+      expect(Vm.first.strand.stack[0]["storage_volumes"][1]["encrypted"]).to be true
+      expect(Vm.first.strand.stack[0]["storage_volumes"][1]["size_gib"]).to eq 100
     end
 
     it "fails if pool is not valid" do

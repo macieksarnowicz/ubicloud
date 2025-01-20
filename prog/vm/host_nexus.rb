@@ -38,6 +38,27 @@ class Prog::Vm::HostNexus < Prog::Base
   end
 
   label def start
+    hop_setup_ssh_keys
+  end
+
+  label def setup_ssh_keys
+    # Generate a new SSH key if one is not set.
+    sshable.update(raw_private_key_1: SshKey.generate.keypair) unless sshable.raw_private_key_1
+
+    if Config.hetzner_ssh_private_key
+      root_key = Net::SSH::Authentication::ED25519::PrivKey.read(Config.hetzner_ssh_private_key, Config.hetzner_ssh_private_key_passphrase).sign_key
+      root_ssh_key = SshKey.from_binary(root_key.keypair)
+
+      public_keys = sshable.keys.first.public_key
+      public_keys += "\n#{Config.operator_ssh_public_keys}" if Config.operator_ssh_public_keys
+
+      Util.rootish_ssh(sshable.host, "root", root_ssh_key.private_key, "echo '#{public_keys}' > ~/.ssh/authorized_keys")
+    end
+
+    hop_bootstrap_rhizome
+  end
+
+  label def bootstrap_rhizome
     register_deadline("download_boot_images", 10 * 60)
     hop_prep if retval&.dig("msg") == "rhizome user bootstrapped and source installed"
 
@@ -148,12 +169,10 @@ class Prog::Vm::HostNexus < Prog::Base
   end
 
   label def reboot
-    begin
-      q_last_boot_id = vm_host.last_boot_id.shellescape
-      new_boot_id = sshable.cmd("sudo host/bin/reboot-host #{q_last_boot_id}").strip
-    rescue Net::SSH::Disconnect, Net::SSH::ConnectionTimeout, Errno::ECONNRESET, Errno::ECONNREFUSED, IOError
-      nap 30
-    end
+    nap 30 unless sshable.available?
+
+    q_last_boot_id = vm_host.last_boot_id.shellescape
+    new_boot_id = sshable.cmd("sudo host/bin/reboot-host #{q_last_boot_id}").strip
 
     # If we didn't get a valid new boot id, nap. This can happen if reboot-host
     # issues a reboot and returns without closing the ssh connection.
@@ -240,12 +259,39 @@ class Prog::Vm::HostNexus < Prog::Base
       vm.incr_start_after_host_reboot
     }
 
+    when_graceful_reboot_set? do
+      fail "BUG: VmHost not in draining state" unless vm_host.allocation_state == "draining"
+      vm_host.update(allocation_state: "accepting")
+      decr_graceful_reboot
+    end
+
     vm_host.update(allocation_state: "accepting") if vm_host.allocation_state == "unprepared"
 
     hop_wait
   end
 
+  label def prep_graceful_reboot
+    case vm_host.allocation_state
+    when "accepting"
+      vm_host.update(allocation_state: "draining")
+    when "draining"
+      # nothing
+    else
+      fail "BUG: VmHost not in accepting or draining state"
+    end
+
+    if vm_host.vms_dataset.empty?
+      hop_prep_reboot
+    end
+
+    nap 30
+  end
+
   label def wait
+    when_graceful_reboot_set? do
+      hop_prep_graceful_reboot
+    end
+
     when_reboot_set? do
       hop_prep_reboot
     end

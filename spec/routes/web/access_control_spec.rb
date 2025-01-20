@@ -204,7 +204,7 @@ RSpec.describe Clover, "access control" do
     end
 
     it "does not show access control entries for tokens" do
-      AccessControlEntry.create_with_id(project_id: project.id, subject_id: ApiKey.create_personal_access_token(user).id)
+      AccessControlEntry.create_with_id(project_id: project.id, subject_id: ApiKey.create_personal_access_token(user, project:).id)
 
       visit "#{project.path}/user/access-control"
       expect(displayed_access_control_entries).to eq [
@@ -357,7 +357,7 @@ RSpec.describe Clover, "access control" do
 
     it "cannot create access control entries for tokens" do
       # Create subject tag with the same id as token to avoid need to muck with the UI
-      SubjectTag.create(project_id: project.id, name: "STest") { |st| st.id = ApiKey.create_personal_access_token(user).id }
+      SubjectTag.create(project_id: project.id, name: "STest") { |st| st.id = ApiKey.create_personal_access_token(user, project:).id }
       visit "#{project.path}/user/access-control"
       within("#ace-template .subject") { select "STest" }
       expect(AccessControlEntry.count).to eq 2
@@ -880,8 +880,11 @@ RSpec.describe Clover, "access control" do
       admin = SubjectTag[project_id: project.id, name: "Admin"]
       visit "#{project.path}/user/access-control/tag/subject/#{admin.ubid}"
       check "remove[]"
-      click_button "Remove Members"
-      expect(page).to have_flash_error "Members not removed from tag: must keep at least one account in Admin subject tag"
+      2.times do
+        click_button "Remove Members"
+        expect(page).to have_flash_error "Must keep at least one account in Admin subject tag"
+        expect(page.title).to eq "Ubicloud - Default - Admin"
+      end
     end
 
     it "handles serialization failure when adding members" do

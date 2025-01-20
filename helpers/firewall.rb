@@ -30,9 +30,9 @@ class Clover
     firewall = Firewall.create_with_id(
       name: firewall_name,
       description:,
-      location: @location
+      location: @location,
+      project_id: @project.id
     )
-    firewall.associate_with_project(@project)
 
     if api?
       Serializers::Firewall.serialize(firewall)

@@ -21,8 +21,8 @@ RSpec.describe Clover, "inference-playground" do
 
     it "gives choice of inference endpoints" do
       ps = Prog::Vnet::SubnetNexus.assemble(project.id, name: "dummy-ps-1", location: "hetzner-fsn1").subject
-      lb = LoadBalancer.create_with_id(private_subnet_id: ps.id, name: "dummy-lb-1", src_port: 80, dst_port: 80, health_check_endpoint: "/up")
-      lb2 = LoadBalancer.create_with_id(private_subnet_id: ps.id, name: "dummy-lb-2", src_port: 80, dst_port: 80, health_check_endpoint: "/up")
+      lb = LoadBalancer.create_with_id(private_subnet_id: ps.id, name: "dummy-lb-1", src_port: 80, dst_port: 80, health_check_endpoint: "/up", project_id: project.id)
+      lb2 = LoadBalancer.create_with_id(private_subnet_id: ps.id, name: "dummy-lb-2", src_port: 80, dst_port: 80, health_check_endpoint: "/up", project_id: project.id)
       [
         ["ie1", "e5-mistral-7b-it", project_wo_permissions, true, true, lb.id, {capability: "Embeddings"}],
         ["ie2", "e5-mistral-8b-it", project_wo_permissions, true, false, lb.id, {capability: "Text Generation"}],
@@ -31,8 +31,7 @@ RSpec.describe Clover, "inference-playground" do
         ["ie5", "llama-3-2-3b-it", project, false, false, lb.id, {capability: "Text Generation"}],
         ["ie6", "test-model", project_wo_permissions, true, true, lb.id, {capability: "Text Generation"}]
       ].each do |name, model_name, project, is_public, visible, load_balancer_id, tags|
-        ie = InferenceEndpoint.create_with_id(name:, model_name:, project_id: project.id, is_public:, visible:, load_balancer_id:, location: "loc", vm_size: "size", replica_count: 1, boot_image: "image", storage_volumes: [], engine_params: "", engine: "vllm", private_subnet_id: ps.id, tags:)
-        ie.associate_with_project(project)
+        InferenceEndpoint.create_with_id(name:, model_name:, project_id: project.id, is_public:, visible:, load_balancer_id:, location: "loc", vm_size: "size", replica_count: 1, boot_image: "image", storage_volumes: [], engine_params: "", engine: "vllm", private_subnet_id: ps.id, tags:)
       end
       visit "#{project.path}/inference-playground"
 

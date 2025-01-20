@@ -70,7 +70,7 @@ module ThawedMock
   allow_mocking(PostgresMetricDestination, :from_ubid)
   allow_mocking(PostgresResource, :[])
   allow_mocking(PostgresServer, :create, :run_query)
-  allow_mocking(Project, :[], :from_ubid)
+  allow_mocking(Project, :[], :from_ubid, :order_by)
   allow_mocking(Semaphore, :where)
   allow_mocking(Sshable, :create, :repl?)
   allow_mocking(StorageKeyEncryptionKey, :create)
@@ -80,10 +80,12 @@ module ThawedMock
   allow_mocking(Vm, :[], :where)
   allow_mocking(VmPool, :[], :where)
   allow_mocking(VmHostSlice, :[])
+  allow_mocking(VmHostCpu, :create)
 
   # Progs
   allow_mocking(Prog::Ai::InferenceEndpointNexus, :assemble, :model_for_id)
   allow_mocking(Prog::Ai::InferenceEndpointReplicaNexus, :assemble)
+  allow_mocking(Prog::DnsZone::SetupDnsServerVm, :vms_in_sync?)
   allow_mocking(Prog::Github::DestroyGithubInstallation, :assemble)
   allow_mocking(Prog::PageNexus, :assemble)
   allow_mocking(Prog::Postgres::PostgresResourceNexus, :dns_zone)

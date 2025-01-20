@@ -10,7 +10,8 @@ RSpec.describe MinioCluster do
       admin_user: "minio-admin",
       admin_password: "dummy-password",
       root_cert_1: "root_cert_1",
-      root_cert_2: "root_cert_2"
+      root_cert_2: "root_cert_2",
+      project_id: Project.create(name: "test").id
     )
     mp = MinioPool.create_with_id(
       cluster_id: mc.id,
@@ -57,10 +58,5 @@ RSpec.describe MinioCluster do
   it "returns connection strings properly" do
     expect(mc.servers.first.vm).to receive(:ephemeral_net4).and_return("1.1.1.1")
     expect(mc.ip4_urls).to eq(["https://1.1.1.1:9000"])
-  end
-
-  it "returns hyper tag name properly" do
-    project = instance_double(Project, ubid: "project-ubid")
-    expect(mc.hyper_tag_name(project)).to eq("project/project-ubid/location/eu-central-h1/minio-cluster/minio-cluster-name")
   end
 end

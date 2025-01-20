@@ -62,9 +62,15 @@ class Clover < Roda
   plugin :invalid_request_body, :raise
   plugin :json_parser, wrap: :unless_hash, error_handler: lambda { |r| raise Roda::RodaPlugins::InvalidRequestBody::Error, "invalid JSON uploaded" }
   plugin :public
-  plugin :render, escape: true, layout: "./layouts/app", template_opts: {chain_appends: true, freeze: true, skip_compiled_encoding_detection: true, scope_class: self, default_fixed_locals:, extract_fixed_locals: true}
+  plugin :render, escape: true, layout: "./layouts/app", template_opts: {chain_appends: !defined?(SimpleCov), freeze: true, skip_compiled_encoding_detection: true, scope_class: self, default_fixed_locals:, extract_fixed_locals: true}
   plugin :request_headers
   plugin :typecast_params_sized_integers, sizes: [64], default_size: 64
+
+  # :nocov:
+  if Config.test? && defined?(SimpleCov)
+    plugin :render_coverage
+  end
+  # :nocov:
 
   plugin :host_routing, scope_predicates: true do |hosts|
     hosts.register :api, :web, :runtime
@@ -302,7 +308,7 @@ class Clover < Roda
       verify_account_email_sent_redirect { login_route }
       verify_account_email_recently_sent_redirect { login_route }
       verify_account_set_password? false
-      verify_account_resend_explanatory_text { verify_account_email_recently_sent? ? "<p>You need to wait at least #{verify_account_skip_resend_email_within} seconds before sending another verification email. If you did not receive the email, please check your spam folder.</p>" : super() }
+      verify_account_resend_explanatory_text "You need to wait at least 5 minutes before sending another verification email. If you did not receive the email, please check your spam folder."
 
       send_verify_account_email do
         Util.send_email(email_to, "Welcome to Ubicloud: Please Verify Your Account",
@@ -573,6 +579,7 @@ class Clover < Roda
     add_recovery_codes_view { view "account/multifactor/recovery_codes", "My Account" }
     auto_add_recovery_codes? true
     auto_remove_recovery_codes? true
+    add_recovery_codes_heading "Add Additional Recovery Codes"
     recovery_auth_view { view "auth/recovery_auth", "Recovery Codes" }
   end
 
@@ -588,11 +595,16 @@ class Clover < Roda
 
   # :nocov:
   if Config.test?
+    # :nocov:
     hash_branch(:webhook_prefix, "test-error") do |r|
       raise(r.params["message"] || "test error")
     end
+
+    hash_branch("clear-last-password-entry") do |r|
+      session.delete("last_password_entry")
+      ""
+    end
   end
-  # :nocov:
 
   if Config.production? || ENV["FORCE_AUTOLOAD"] == "1"
     Unreloader.require("routes")

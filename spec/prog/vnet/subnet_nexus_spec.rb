@@ -6,15 +6,15 @@ RSpec.describe Prog::Vnet::SubnetNexus do
   }
 
   let(:st) { Strand.new }
-  let(:prj) { Project.create_with_id(name: "default").tap { _1.associate_with_project(_1) } }
+  let(:prj) { Project.create_with_id(name: "default") }
   let(:ps) {
     PrivateSubnet.create_with_id(name: "ps", location: "hetzner-fsn1", net6: "fd10:9b0b:6b4b:8fbb::/64",
-      net4: "1.1.1.0/26", state: "waiting")
+      net4: "1.1.1.0/26", state: "waiting", project_id: prj.id)
   }
 
   let(:ps2) {
     PrivateSubnet.create_with_id(name: "ps2", location: "hetzner-fsn1", net6: "fd10:9b0b:6b4b:8fcc::/64",
-      net4: "1.1.1.128/26", state: "waiting")
+      net4: "1.1.1.128/26", state: "waiting", project_id: prj.id)
   }
 
   before do
@@ -53,7 +53,7 @@ RSpec.describe Prog::Vnet::SubnetNexus do
     end
 
     it "uses firewall if provided" do
-      fw = Firewall.create_with_id(name: "default-firewall", location: "hetzner-fsn1").tap { _1.associate_with_project(prj) }
+      fw = Firewall.create_with_id(name: "default-firewall", location: "hetzner-fsn1", project_id: prj.id)
       ps = described_class.assemble(prj.id, firewall_id: fw.id)
       expect(ps.subject.firewalls.count).to eq(1)
       expect(ps.subject.firewalls.first).to eq(fw)
@@ -66,14 +66,14 @@ RSpec.describe Prog::Vnet::SubnetNexus do
     end
 
     it "fails if firewall is not in the project" do
-      fw = Firewall.create_with_id(name: "default-firewall", location: "hetzner-fsn1")
+      fw = Firewall.create_with_id(name: "default-firewall", location: "hetzner-fsn1", project_id: Project.create(name: "t2").id)
       expect {
         described_class.assemble(prj.id, firewall_id: fw.id)
       }.to raise_error RuntimeError, "Firewall with id #{fw.id} and location hetzner-fsn1 does not exist"
     end
 
     it "fails if both allow_only_ssh and firewall_id are specified" do
-      fw = Firewall.create_with_id(name: "default-firewall", location: "hetzner-fsn1").tap { _1.associate_with_project(prj) }
+      fw = Firewall.create_with_id(name: "default-firewall", location: "hetzner-fsn1", project_id: prj.id)
       expect {
         described_class.assemble(prj.id, firewall_id: fw.id, allow_only_ssh: true)
       }.to raise_error RuntimeError, "Cannot specify both allow_only_ssh and firewall_id"
@@ -319,7 +319,7 @@ RSpec.describe Prog::Vnet::SubnetNexus do
 
     it "finds a new subnet if the one it found is taken" do
       expect(PrivateSubnet).to receive(:random_subnet).and_return("10.0.0.0/8").at_least(:once)
-      project = Project.create_with_id(name: "test-project").tap { _1.associate_with_project(_1) }
+      project = Project.create_with_id(name: "test-project")
       described_class.assemble(project.id, location: "hetzner-fsn1", name: "test-subnet", ipv4_range: "10.0.0.128/26")
       allow(SecureRandom).to receive(:random_number).with(2**(26 - 8) - 1).and_return(1, 2)
       expect(described_class.random_private_ipv4("hetzner-fsn1", project).to_s).to eq("10.0.0.192/26")
@@ -327,7 +327,7 @@ RSpec.describe Prog::Vnet::SubnetNexus do
 
     it "finds a new subnet if the one it found is banned" do
       expect(PrivateSubnet).to receive(:random_subnet).and_return("172.16.0.0/16", "10.0.0.0/8")
-      project = Project.create_with_id(name: "test-project").tap { _1.associate_with_project(_1) }
+      project = Project.create_with_id(name: "test-project")
       allow(SecureRandom).to receive(:random_number).with(2**(26 - 16) - 1).and_return(1)
       allow(SecureRandom).to receive(:random_number).with(2**(26 - 8) - 1).and_return(1)
       expect(described_class.random_private_ipv4("hetzner-fsn1", project).to_s).to eq("10.0.0.128/26")
@@ -340,7 +340,7 @@ RSpec.describe Prog::Vnet::SubnetNexus do
     end
 
     it "finds a new subnet if the one it found is taken" do
-      project = Project.create_with_id(name: "test-project").tap { _1.associate_with_project(_1) }
+      project = Project.create_with_id(name: "test-project")
       described_class.assemble(project.id, location: "hetzner-fsn1", name: "test-subnet", ipv6_range: "fd61:6161:6161:6161::/64")
       expect(SecureRandom).to receive(:bytes).with(7).and_return("a" * 7, "b" * 7)
       expect(described_class.random_private_ipv6("hetzner-fsn1", project).to_s).to eq("fd62:6262:6262:6262::/64")
@@ -383,20 +383,16 @@ RSpec.describe Prog::Vnet::SubnetNexus do
     it "deletes and pops if nics are destroyed" do
       expect(ps).to receive(:destroy).and_return(true)
       expect(ps).to receive(:nics).and_return([]).at_least(:once)
-      expect(ps).to receive(:projects).and_return([prj]).at_least(:once)
-      expect(ps).to receive(:dissociate_with_project).with(prj).and_return(true)
       expect { nx.destroy }.to exit({"msg" => "subnet destroyed"})
     end
 
     it "disconnects all subnets" do
-      prj = Project.create_with_id(name: "test-project").tap { _1.associate_with_project(_1) }
+      prj = Project.create_with_id(name: "test-project")
       ps1 = described_class.assemble(prj.id, name: "ps1").subject
       ps2 = described_class.assemble(prj.id, name: "ps2").subject
       ps1.connect_subnet(ps2)
       expect(ps1.connected_subnets.map(&:id)).to eq [ps2.id]
       expect(ps2.connected_subnets.map(&:id)).to eq [ps1.id]
-      expect(ps1).to receive(:projects).and_return([prj]).at_least(:once)
-      expect(ps1).to receive(:dissociate_with_project).with(prj).and_return(true)
 
       expect(nx).to receive(:private_subnet).and_return(ps1).at_least(:once)
       expect(ps1).to receive(:disconnect_subnet).with(ps2).and_call_original

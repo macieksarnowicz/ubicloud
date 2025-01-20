@@ -10,15 +10,11 @@ RSpec.describe Clover, "firewall" do
   let(:project_wo_permissions) { user.create_project_with_default_policy("project-2", default_policy: nil) }
 
   let(:firewall) do
-    fw = Firewall.create_with_id(name: "dummy-fw", description: "dummy-fw", location: "hetzner-fsn1")
-    fw.associate_with_project(project)
-    fw
+    Firewall.create_with_id(name: "dummy-fw", description: "dummy-fw", location: "hetzner-fsn1", project_id: project.id)
   end
 
   let(:fw_wo_permission) {
-    fw = Firewall.create_with_id(name: "dummy-fw-2", description: "dummy-fw-2", location: "hetzner-fsn1")
-    fw.associate_with_project(project_wo_permissions)
-    fw
+    Firewall.create_with_id(name: "dummy-fw-2", description: "dummy-fw-2", location: "hetzner-fsn1", project_id: project_wo_permissions.id)
   }
 
   describe "unauthenticated" do
@@ -47,7 +43,7 @@ RSpec.describe Clover, "firewall" do
         expect(page.title).to eq("Ubicloud - Firewalls")
         expect(page).to have_content "No firewalls"
 
-        click_link "New Firewall"
+        click_link "Create Firewall"
         expect(page.title).to eq("Ubicloud - Create Firewall")
       end
 
@@ -59,6 +55,51 @@ RSpec.describe Clover, "firewall" do
         expect(page.title).to eq("Ubicloud - Firewalls")
         expect(page).to have_content firewall.name
         expect(page).to have_no_content fw_wo_permission.name
+      end
+
+      it "does not show links to firewalls if user lacks Firewall:view access to them" do
+        firewall
+        fw = Firewall.create_with_id(name: "viewable-fw", description: "viewable-fw", location: "hetzner-fsn1", project_id: project.id)
+
+        visit "#{project.path}/firewall"
+        link_texts = page.all("a").map(&:text)
+        expect(link_texts).to include fw.name
+        expect(link_texts).to include firewall.name
+        expect(link_texts).to include "Create Firewall"
+
+        AccessControlEntry.dataset.destroy
+        AccessControlEntry.create(project_id: project.id, subject_id: user.id, action_id: ActionType::NAME_MAP["Firewall:view"], object_id: fw.id)
+        page.refresh
+        expect(page).to have_no_content firewall.name
+        link_texts = page.all("a").map(&:text)
+        expect(link_texts).to include fw.name
+        expect(link_texts).not_to include "Create Firewall"
+
+        click_link fw.name
+        expect(page).to have_no_content "Delete firewall"
+        expect(page.body).not_to include "form-fw-create-rule"
+
+        fw.add_firewall_rule(cidr: "127.0.0.1")
+        fw.add_private_subnet(net6: "::0/24", net4: "127.0.0.0/24", name: "dummy-ps", location: "somewhere", project_id: project.id)
+
+        page.refresh
+        expect(page.body).not_to include "private_subnet_id"
+        expect(page.body).not_to include "/detach-subnet\""
+        expect(page.body).not_to include "form-fw-create-rule-"
+        expect(page.body).not_to include "/firewall-rule/"
+      end
+
+      it "only shows New Firewall link on empty page if user has Firewall:create access" do
+        visit "#{project.path}/firewall"
+        expect(page.all("a").map(&:text)).to include "Create Firewall"
+        expect(page).to have_content "Get started by creating a new firewall."
+        expect(page).to have_no_content "You don't have permission to create firewalls."
+
+        AccessControlEntry.dataset.destroy
+        page.refresh
+        expect(page.all("a").map(&:text)).not_to include "Create Firewall"
+        expect(page).to have_content "You don't have permission to create firewalls."
+        expect(page).to have_no_content "Get started by creating a new firewall."
       end
     end
 
@@ -77,7 +118,7 @@ RSpec.describe Clover, "firewall" do
         expect(page.title).to eq("Ubicloud - #{name}")
         expect(page).to have_flash_notice("'#{name}' is created")
         expect(Firewall.count).to eq(1)
-        expect(Firewall.first.projects.first.id).to eq(project.id)
+        expect(Firewall.first.project_id).to eq(project.id)
       end
 
       it "can create new firewall with private subnet" do

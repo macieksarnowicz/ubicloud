@@ -76,22 +76,20 @@ RSpec.describe Clover, "personal access token management" do
     expect(ApiKey.count).to eq(1)
     expect(@api_key.owner_id).to eq(user.id)
     expect(@api_key.owner_table).to eq("accounts")
-    expect(@api_key.projects).to eq([project])
+    expect(@api_key.project).to eq(project)
     expect(@api_key.used_for).to eq("api")
     expect(@api_key.is_valid).to be(true)
     expect(SubjectTag[project_id: project.id, name: "Admin"].member_ids).to include @api_key.id
   end
 
   it "user page only shows tokens related to project" do
-    key = ApiKey.create_personal_access_token(user)
+    key = ApiKey.create_personal_access_token(user, project: Project.create(name: "test2"))
     page.refresh
     expect(page).to have_content(@api_key.ubid)
     expect(page).to have_no_content(key.ubid)
   end
 
   it "user page allows removing personal access tokens" do
-    access_tag_ds = DB[:access_tag].where(hyper_tag_id: @api_key.id)
-    expect(access_tag_ds.all).not_to be_empty
     AccessControlEntry.create_with_id(project_id: project.id, subject_id: @api_key.id)
 
     path = page.current_path
@@ -101,7 +99,6 @@ RSpec.describe Clover, "personal access token management" do
     page.driver.delete data_url, {_csrf:}
     expect(page.status_code).to eq(204)
     expect(ApiKey.all).to be_empty
-    expect(access_tag_ds.all).to be_empty
     expect(DB[:applied_subject_tag].where(tag_id: project.subject_tags_dataset.first(name: "Admin").id, subject_id: @api_key.id).all).to be_empty
     expect(AccessControlEntry.where(project_id: project.id, subject_id: @api_key.id).all).to be_empty
 
@@ -126,7 +123,7 @@ RSpec.describe Clover, "personal access token management" do
   end
 
   it "cannot view token access control entries for token not associated with this project" do
-    key = ApiKey.create_personal_access_token(user)
+    key = ApiKey.create_personal_access_token(user, project: Project.create(name: "test2"))
     visit "#{project.path}/token/#{key.ubid}/access-control"
     expect(page.status_code).to eq 404
   end

@@ -97,6 +97,7 @@ RSpec.describe Clover, "private_subnet" do
       end
 
       it "not authorized" do
+        project
         post "/project/#{project_wo_permissions.ubid}/location/#{ps_wo_permission.location}/private-subnet/foo_subnet"
 
         expect(last_response.content_type).to eq("application/json")
@@ -104,7 +105,7 @@ RSpec.describe Clover, "private_subnet" do
       end
 
       it "with valid firewall" do
-        fw = Firewall.create_with_id(name: "default-firewall", location: "hetzner-fsn1").tap { _1.associate_with_project(project) }
+        fw = Firewall.create_with_id(name: "default-firewall", location: "hetzner-fsn1", project_id: project.id)
         post "/project/#{project.ubid}/location/#{TEST_LOCATION}/private-subnet/test-ps", {firewall_id: fw.ubid}.to_json
 
         expect(last_response.status).to eq(200)
@@ -149,6 +150,7 @@ RSpec.describe Clover, "private_subnet" do
       end
 
       it "not authorized" do
+        project
         get "/project/#{project_wo_permissions.ubid}/location/#{ps_wo_permission.display_location}/private-subnet/#{ps_wo_permission.name}"
 
         expect(last_response).to have_api_error(403, "Sorry, you don't have permission to continue with this request.")
@@ -220,6 +222,7 @@ RSpec.describe Clover, "private_subnet" do
       end
 
       it "not authorized" do
+        project
         delete "/project/#{project_wo_permissions.ubid}/location/#{ps_wo_permission.display_location}/private-subnet/#{ps_wo_permission.name}"
 
         expect(last_response).to have_api_error(403, "Sorry, you don't have permission to continue with this request.")
